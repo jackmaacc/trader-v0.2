@@ -1,0 +1,29 @@
+# Local environments and credentials
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*.pem
+*.key
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Research runs, broker records, and local backups
+artifacts/
+.backups/
+*.log
+
+# macOS metadata
+.DS_Store

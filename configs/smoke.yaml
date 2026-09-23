@@ -1,0 +1,131 @@
+logging:
+  level: INFO
+
+storage:
+  cache_dir: artifacts/cache
+  output_dir: artifacts/latest
+
+universe:
+  equities:
+    - SPY
+    - AAPL
+  crypto:
+    - BTC-USD
+    - ETH-USD
+
+data:
+  historical_provider: yfinance
+  live_provider: mock
+  start_date: 2023-01-01
+  end_date:
+  interval: 1d
+  adjust_prices: true
+  use_cache: true
+  min_history_bars: 120
+
+features:
+  return_horizons: [1, 5, 10, 20]
+  atr_window: 14
+  volatility_window: 20
+  rsi_window: 14
+  moving_average_windows: [10, 20, 50]
+  zscore_window: 20
+  volume_window: 20
+  bars_per_year_equity: 252
+  bars_per_year_crypto: 365
+
+states:
+  model_name: composite_rule
+  trend_threshold: 0.01
+  volatility_zscore_threshold: 0.5
+  momentum_threshold: 0.02
+  extension_threshold: 1.5
+  rsi_overbought: 70
+  rsi_oversold: 30
+
+markov:
+  transition_horizon_bars: 1
+  forward_return_horizon_bars: 5
+  min_state_observations: 15
+  laplace_smoothing: 1.0
+  transition_lookback_bars: 126
+
+signals:
+  min_training_bars: 90
+  min_expected_value: 0.0005
+  min_confidence: 0.05
+  transaction_cost_bps: 5.0
+  slippage_bps: 5.0
+  volatility_penalty: 0.08
+  liquidity_threshold: 1000000
+  liquidity_penalty: 0.001
+  allow_short_equities: false
+  allow_short_crypto: true
+
+risk:
+  initial_capital: 100000
+  max_position_pct: 0.15
+  max_gross_exposure: 1.0
+  max_concurrent_positions: 4
+  stop_atr_multiple: 2.0
+  max_daily_loss_pct: 0.03
+  volatility_target:
+
+backtest:
+  hold_bars: 5
+  exit_on_state_change: true
+  exit_on_signal_flip: true
+  commission_bps: 2.0
+  slippage_bps_equity: 2.0
+  slippage_bps_crypto: 5.0
+  annualization_factor: 252
+
+execution:
+  paper_enabled: true
+  broker_name: paper
+  journal_dir: artifacts/latest/paper
+
+dashboard:
+  artifacts_dir: artifacts/latest
+
+research:
+  walk_forward:
+    enabled: true
+    train_bars: 140
+    validation_bars: 35
+    test_bars: 35
+    step_bars: 35
+    refit_on_validation_for_test: true
+    minimum_symbol_train_bars: 90
+  parameter_sweep:
+    enabled: false
+    search_space: {}
+    max_combinations: 16
+    rank_metric: mean_test_sharpe
+    top_k: 10
+  diagnostics:
+    top_n_trades: 15
+    min_group_observations: 3
+
+asset_overrides:
+  equity:
+    states:
+      trend_threshold: 0.008
+      momentum_threshold: 0.015
+    signals:
+      min_expected_value: 0.0005
+      volatility_penalty: 0.08
+    risk:
+      stop_atr_multiple: 2.0
+  crypto:
+    states:
+      trend_threshold: 0.015
+      momentum_threshold: 0.03
+    markov:
+      transition_lookback_bars: 90
+    signals:
+      min_expected_value: 0.001
+      volatility_penalty: 0.12
+      liquidity_penalty: 0.0015
+    risk:
+      stop_atr_multiple: 2.5

@@ -1,0 +1,551 @@
+logging:
+  level: INFO
+
+storage:
+  cache_dir: artifacts/cache
+  output_dir: artifacts/latest
+
+universe:
+  equities:
+    - SPY
+    - AAPL
+  crypto:
+    - BTC-USD
+    - ETH-USD
+
+data:
+  historical_provider: yfinance
+  live_provider: mock
+  start_date: 2023-01-01
+  end_date:
+  interval: 1d
+  adjust_prices: true
+  use_cache: true
+  min_history_bars: 220
+
+features:
+  return_horizons: [1, 3, 5, 10, 20, 60]
+  atr_window: 14
+  volatility_window: 20
+  rsi_window: 14
+  moving_average_windows: [10, 20, 50, 200]
+  zscore_window: 20
+  volume_window: 20
+  return_zscore_window: 20
+  acceleration_pairs: [[3, 10], [5, 20], [20, 60]]
+  bars_per_year_equity: 252
+  bars_per_year_crypto: 365
+
+states:
+  model_name: feature_bins
+  trend_threshold: 0.01
+  volatility_zscore_threshold: 0.5
+  momentum_threshold: 0.02
+  extension_threshold: 1.5
+  rsi_overbought: 70
+  rsi_oversold: 30
+  short_horizon: 5
+  medium_horizon: 20
+  long_horizon: 60
+  acceleration_threshold: 0.002
+  vol_regime_threshold: 0.15
+  atr_move_threshold: 1.0
+  return_zscore_threshold: 1.0
+  volume_expansion_threshold: 1.25
+  volume_contraction_threshold: 0.8
+  persistence_thresholds: [3, 10]
+  rich_components: [trend, volatility, acceleration, extension, persistence]
+  bin_features: [return_5, return_20, realized_vol_20, ma_gap_50, rsi_14, volume_ratio_20]
+  bin_count: 3
+  binning_strategy: quantile
+  bin_feature_bin_counts:
+    realized_vol_20: 2
+    rsi_14: 2
+    volume_ratio_20: 2
+    bin_group_trend_composite: 3
+  bin_feature_groups:
+    - name: trend_composite
+      features: [return_5, return_20, ma_gap_20, ma_gap_50]
+      reducer: mean_zscore
+      replace_members: true
+  bin_merge_sparse_states: true
+  bin_min_state_observations: 18
+  bin_merge_order: [volume_ratio_20, rsi_14, realized_vol_20, bin_group_trend_composite]
+  bin_merge_label: any
+  cluster_features: [return_5, return_20, return_60, realized_vol_20, vol_regime_20, ma_gap_20, ma_gap_50, ma_gap_200, rsi_14, volume_ratio_20, trend_persistence]
+  cluster_count: 6
+  cluster_random_state: 7
+  cluster_n_init: 20
+  cluster_max_iter: 300
+  cluster_min_size: 18
+  cluster_merge_small_clusters: true
+  cluster_dimensionality_reduction: pca
+  cluster_pca_components: 4
+  hybrid_anchor: trend
+  hybrid_cluster_count: 3
+  hybrid_min_regime_samples: 55
+  contextualize_states: false
+  append_previous_state: false
+  previous_state_mode: group
+  append_state_age_bucket: false
+  duration_buckets: [3, 10]
+  append_recent_path: false
+  recent_path_length: 2
+  append_entry_bias: false
+  rich_collapse_rsi_zones: true
+  rich_collapse_volatility_regimes: true
+  rich_collapse_momentum_regimes: true
+  rich_merge_sparse_states: true
+  rich_min_state_observations: 18
+  rich_merge_order: [persistence, volume, extension, acceleration]
+  rich_merge_label: any
+  sparse_state_warning_threshold: 12
+
+markov:
+  transition_horizon_bars: 1
+  forward_return_horizon_bars: 5
+  min_state_observations: 15
+  laplace_smoothing: 1.0
+  transition_lookback_bars: 126
+
+signals:
+  min_training_bars: 90
+  min_expected_value: 0.0005
+  min_confidence: 0.05
+  transaction_cost_bps: 5.0
+  slippage_bps: 5.0
+  volatility_penalty: 0.08
+  liquidity_threshold: 1000000
+  liquidity_penalty: 0.001
+  allow_short_equities: false
+  allow_short_crypto: true
+  selection_policy_name: feature_bins_consistency_first
+  selection_mode: hybrid
+  quality_gate_mode: "off"
+  quality_gate_components: [state, transition, consistency]
+  hard_filter_components: [sample_size, consistency]
+  min_state_quality_score: 0.35
+  min_transition_quality_score: 0.35
+  min_fold_consistency_score: 0.25
+  min_sample_size_score: 0.25
+  min_state_trade_count: 4
+  min_transition_trade_count: 4
+  min_state_active_folds: 1
+  min_transition_active_folds: 1
+  min_state_positive_fold_fraction: 0.50
+  min_transition_positive_fold_fraction: 0.50
+  min_state_quality_percentile: 0.40
+  min_transition_quality_percentile: 0.40
+  min_consistency_percentile: 0.35
+  max_state_quality_rank: 12
+  max_transition_quality_rank: 12
+  max_consistency_rank: 12
+  max_state_expectancy_variance: 0.0012
+  max_transition_expectancy_variance: 0.0018
+  max_state_sharpe_variance: 1.2
+  max_transition_sharpe_variance: 1.4
+  family_filter_mode: score_only
+  top_state_family_count: 3
+  top_n_per_rebalance_date: 4
+  top_n_per_asset_class: 2
+  top_n_per_model: 4
+  selection_score_weights:
+    base_signal: 0.00
+    opportunity_score: 0.30
+    state_quality: 0.15
+    transition_quality: 0.10
+    family_rank: 0.10
+    fold_consistency: 0.20
+    sample_size: 0.00
+    trade_count: 0.05
+    tradability: 0.10
+
+risk:
+  initial_capital: 100000
+  max_position_pct: 0.15
+  max_gross_exposure: 1.0
+  max_concurrent_positions: 4
+  stop_atr_multiple: 2.0
+  max_daily_loss_pct: 0.03
+  volatility_target:
+
+backtest:
+  hold_bars: 5
+  exit_on_state_change: true
+  exit_on_signal_flip: true
+  use_atr_stop: true
+  trailing_stop: false
+  commission_bps: 2.0
+  slippage_bps_equity: 2.0
+  slippage_bps_crypto: 5.0
+  annualization_factor: 252
+
+execution:
+  paper_enabled: true
+  broker_name: paper
+  journal_dir: artifacts/latest/paper
+
+dashboard:
+  artifacts_dir: artifacts/latest
+
+research:
+  walk_forward:
+    enabled: true
+    train_bars: 140
+    validation_bars: 35
+    test_bars: 35
+    step_bars: 35
+    refit_on_validation_for_test: true
+    minimum_symbol_train_bars: 90
+  parameter_sweep:
+    enabled: false
+    search_space: {}
+    max_combinations: 16
+    rank_metric: mean_test_sharpe
+    top_k: 10
+  diagnostics:
+    top_n_trades: 15
+    min_group_observations: 3
+  selection_policies:
+    feature_bins_consistency_first:
+      description: Feature-bin policy that hard-filters only on viability and consistency, then ranks surviving setups.
+      signals:
+        selection_mode: hybrid
+        quality_gate_components: [consistency]
+        hard_filter_components: [sample_size, consistency]
+        min_fold_consistency_score: 0.25
+        min_consistency_percentile: 0.35
+        min_sample_size_score: 0.25
+        family_filter_mode: score_only
+        selection_score_weights:
+          base_signal: 0.00
+          opportunity_score: 0.30
+          state_quality: 0.15
+          transition_quality: 0.10
+          family_rank: 0.10
+          fold_consistency: 0.20
+          sample_size: 0.00
+          trade_count: 0.05
+          tradability: 0.10
+      asset_signals:
+        equity:
+          min_sample_size_score: 0.25
+          min_fold_consistency_score: 0.25
+          top_n_per_rebalance_date: 4
+        crypto:
+          min_sample_size_score: 0.30
+          min_fold_consistency_score: 0.30
+          top_n_per_rebalance_date: 3
+    feature_bins_consistency_soft_state:
+      description: Consistency-first feature-bin policy with more weight on state and transition quality.
+      signals:
+        selection_mode: hybrid
+        quality_gate_components: [consistency]
+        hard_filter_components: [sample_size, consistency]
+        min_fold_consistency_score: 0.25
+        min_consistency_percentile: 0.35
+        min_sample_size_score: 0.25
+        family_filter_mode: score_only
+        selection_score_weights:
+          base_signal: 0.00
+          opportunity_score: 0.25
+          state_quality: 0.20
+          transition_quality: 0.15
+          family_rank: 0.05
+          fold_consistency: 0.20
+          sample_size: 0.00
+          trade_count: 0.05
+          tradability: 0.10
+    feature_bins_consistency_family_soft:
+      description: Consistency-first feature-bin policy with family rank used only as a soft score.
+      signals:
+        selection_mode: hybrid
+        quality_gate_components: [consistency]
+        hard_filter_components: [sample_size, consistency]
+        min_fold_consistency_score: 0.25
+        min_consistency_percentile: 0.35
+        min_sample_size_score: 0.25
+        family_filter_mode: score_only
+        selection_score_weights:
+          base_signal: 0.00
+          opportunity_score: 0.25
+          state_quality: 0.10
+          transition_quality: 0.10
+          family_rank: 0.20
+          fold_consistency: 0.20
+          sample_size: 0.00
+          trade_count: 0.05
+          tradability: 0.10
+    hybrid_ranking_minimal:
+      description: Ranking-first hybrid policy with only viability hard filters and no family hard gate.
+      signals:
+        selection_mode: soft_scoring_only
+        quality_gate_components: []
+        hard_filter_components: [sample_size]
+        min_sample_size_score: 0.20
+        family_filter_mode: none
+        selection_score_weights:
+          base_signal: 0.00
+          opportunity_score: 0.30
+          state_quality: 0.10
+          transition_quality: 0.10
+          family_rank: 0.05
+          fold_consistency: 0.10
+          sample_size: 0.00
+          trade_count: 0.15
+          tradability: 0.20
+      asset_signals:
+        equity:
+          min_sample_size_score: 0.20
+          top_n_per_rebalance_date: 3
+        crypto:
+          min_sample_size_score: 0.25
+          top_n_per_rebalance_date: 2
+    hybrid_ranking_light_sanity:
+      description: Ranking-first hybrid policy with a light consistency sanity filter layered in.
+      signals:
+        selection_mode: hybrid
+        quality_gate_components: [consistency]
+        hard_filter_components: [sample_size, consistency]
+        min_fold_consistency_score: 0.15
+        min_consistency_percentile: 0.25
+        min_sample_size_score: 0.20
+        family_filter_mode: none
+        selection_score_weights:
+          base_signal: 0.00
+          opportunity_score: 0.28
+          state_quality: 0.10
+          transition_quality: 0.10
+          family_rank: 0.05
+          fold_consistency: 0.15
+          sample_size: 0.00
+          trade_count: 0.12
+          tradability: 0.20
+  state_model_comparison:
+    enabled: true
+    models:
+      - name: feature_bins_dense_base
+        description: Dense feature-bin states without quality gating.
+        overrides:
+          states.model_name: feature_bins
+          signals.selection_mode: soft_scoring_only
+          signals.quality_gate_mode: "off"
+          signals.quality_gate_components: []
+      - name: feature_bins_dense_filtered
+        description: Dense feature-bin states with hybrid quality filtering and ranking.
+        selection_policy: feature_bins_consistency_first
+        overrides:
+          states.model_name: feature_bins
+      - name: hybrid_trend_kmeans_base
+        description: Hybrid trend-regime K-means without quality gating.
+        overrides:
+          states.model_name: hybrid_regime_kmeans
+          states.hybrid_anchor: trend
+          states.hybrid_cluster_count: 3
+          signals.selection_mode: soft_scoring_only
+          signals.quality_gate_mode: "off"
+          signals.quality_gate_components: []
+      - name: hybrid_trend_kmeans_filtered
+        description: Hybrid trend-regime K-means with hybrid quality filtering and ranking.
+        selection_policy: hybrid_ranking_minimal
+        overrides:
+          states.model_name: hybrid_regime_kmeans
+          states.hybrid_anchor: trend
+          states.hybrid_cluster_count: 3
+  selection_policy_comparison:
+    enabled: true
+    experiments:
+      - name: feature_bins_consistency_only
+        model_name: feature_bins_dense_filtered
+        description: Consistency-first feature-bin policy with no family hard filter.
+        category: feature_bins
+        selection_policy: feature_bins_consistency_first
+      - name: feature_bins_consistency_soft_state
+        model_name: feature_bins_dense_filtered
+        description: Consistency-first feature-bin policy with stronger soft state and transition ranking.
+        category: feature_bins
+        selection_policy: feature_bins_consistency_soft_state
+      - name: feature_bins_consistency_soft_family
+        model_name: feature_bins_dense_filtered
+        description: Consistency-first feature-bin policy with family rank treated as score only.
+        category: family_filter
+        selection_policy: feature_bins_consistency_family_soft
+      - name: feature_bins_consistency_top2
+        model_name: feature_bins_dense_filtered
+        description: Consistency-first feature-bin policy with a tighter top-2 cap.
+        category: top_n
+        selection_policy: feature_bins_consistency_first
+        overrides:
+          signals.top_n_per_rebalance_date: 2
+      - name: feature_bins_family_top50
+        model_name: feature_bins_dense_filtered
+        description: Consistency-first feature-bin policy with top-half family hard inclusion.
+        category: family_filter
+        selection_policy: feature_bins_consistency_first
+        overrides:
+          signals.family_filter_mode: top_percentile
+          signals.top_state_family_percentile: 0.50
+          signals.hard_filter_components: [sample_size, consistency, family]
+      - name: feature_bins_family_exclude_bottom25
+        model_name: feature_bins_dense_filtered
+        description: Consistency-first feature-bin policy excluding the bottom family quartile.
+        category: family_filter
+        selection_policy: feature_bins_consistency_first
+        overrides:
+          signals.family_filter_mode: exclude_bottom_percentile
+          signals.exclude_bottom_state_family_percentile: 0.25
+          signals.hard_filter_components: [sample_size, consistency, family]
+      - name: hybrid_ranking_minimal
+        model_name: hybrid_trend_kmeans_filtered
+        description: Ranking-first hybrid policy with only sample-size hard disqualification.
+        category: hybrid
+        selection_policy: hybrid_ranking_minimal
+      - name: hybrid_ranking_light_sanity
+        model_name: hybrid_trend_kmeans_filtered
+        description: Ranking-first hybrid policy with a light consistency sanity filter.
+        category: hybrid
+        selection_policy: hybrid_ranking_light_sanity
+      - name: hybrid_ranking_top1
+        model_name: hybrid_trend_kmeans_filtered
+        description: Ranking-first hybrid policy with a top-1 cap.
+        category: top_n
+        selection_policy: hybrid_ranking_minimal
+        overrides:
+          signals.top_n_per_rebalance_date: 1
+      - name: hybrid_ranking_top3
+        model_name: hybrid_trend_kmeans_filtered
+        description: Ranking-first hybrid policy with a top-3 cap.
+        category: top_n
+        selection_policy: hybrid_ranking_minimal
+        overrides:
+          signals.top_n_per_rebalance_date: 3
+  exit_comparison:
+    enabled: true
+    max_workers: 2
+    model_names:
+      - feature_bins_dense_filtered
+      - hybrid_trend_kmeans_filtered
+    profiles:
+      - name: fixed_hold
+        description: Time-only exit with no state or stop intervention.
+        overrides:
+          backtest.hold_bars: 5
+          backtest.exit_on_state_change: false
+          backtest.use_atr_stop: false
+          backtest.trailing_stop: false
+      - name: state_change_exit
+        description: State-change exit with a wide time cap.
+        overrides:
+          backtest.hold_bars: 30
+          backtest.exit_on_state_change: true
+          backtest.use_atr_stop: false
+          backtest.trailing_stop: false
+      - name: atr_stop
+        description: ATR stop only with a wide time cap.
+        overrides:
+          backtest.hold_bars: 30
+          backtest.exit_on_state_change: false
+          backtest.use_atr_stop: true
+          backtest.trailing_stop: false
+      - name: trailing_stop
+        description: Trailing ATR stop only with a wide time cap.
+        overrides:
+          backtest.hold_bars: 30
+          backtest.exit_on_state_change: false
+          backtest.use_atr_stop: true
+          backtest.trailing_stop: true
+      - name: time_state_hybrid
+        description: Fixed hold plus state-change exit.
+        overrides:
+          backtest.hold_bars: 5
+          backtest.exit_on_state_change: true
+          backtest.use_atr_stop: false
+          backtest.trailing_stop: false
+      - name: time_atr_hybrid
+        description: Fixed hold plus ATR stop.
+        overrides:
+          backtest.hold_bars: 5
+          backtest.exit_on_state_change: false
+          backtest.use_atr_stop: true
+          backtest.trailing_stop: false
+  gate_ablation:
+    enabled: true
+    model_names:
+      - feature_bins_dense_filtered
+      - hybrid_trend_kmeans_filtered
+    selection_mode: hybrid
+
+asset_overrides:
+  equity:
+    states:
+      trend_threshold: 0.008
+      momentum_threshold: 0.015
+      sparse_state_warning_threshold: 10
+      cluster_features: [return_5, return_20, realized_vol_20, ma_gap_20, ma_gap_50, rsi_14, volume_ratio_20, trend_persistence]
+      cluster_pca_components: 3
+      hybrid_anchor: trend
+      bin_features: [realized_vol_20, rsi_14, volume_ratio_20]
+    signals:
+      volatility_penalty: 0.08
+      min_expected_value: 0.0005
+      min_state_quality_score: 0.35
+      min_transition_quality_score: 0.35
+      min_fold_consistency_score: 0.25
+      min_state_trade_count: 4
+      min_transition_trade_count: 4
+      min_state_active_folds: 1
+      min_transition_active_folds: 1
+      min_state_positive_fold_fraction: 0.50
+      min_transition_positive_fold_fraction: 0.50
+      min_state_quality_percentile: 0.40
+      min_transition_quality_percentile: 0.40
+      min_consistency_percentile: 0.35
+      max_state_quality_rank: 10
+      max_transition_quality_rank: 10
+      max_consistency_rank: 10
+      top_state_family_count: 3
+      top_n_per_rebalance_date: 4
+      top_n_per_asset_class: 2
+    risk:
+      stop_atr_multiple: 2.0
+  crypto:
+    states:
+      trend_threshold: 0.015
+      momentum_threshold: 0.03
+      extension_threshold: 1.8
+      sparse_state_warning_threshold: 10
+      cluster_features: [return_5, return_20, return_60, realized_vol_20, vol_regime_20, ma_gap_20, rsi_14, volume_ratio_20, trend_persistence]
+      cluster_count: 5
+      cluster_pca_components: 4
+      hybrid_anchor: volatility
+      bin_features: [return_20, realized_vol_20, rsi_14, volume_ratio_20]
+    markov:
+      transition_lookback_bars: 90
+    signals:
+      volatility_penalty: 0.12
+      liquidity_penalty: 0.0015
+      min_expected_value: 0.001
+      min_state_quality_score: 0.40
+      min_transition_quality_score: 0.40
+      min_fold_consistency_score: 0.30
+      min_state_trade_count: 5
+      min_transition_trade_count: 5
+      min_state_active_folds: 1
+      min_transition_active_folds: 1
+      min_state_positive_fold_fraction: 0.50
+      min_transition_positive_fold_fraction: 0.50
+      min_state_quality_percentile: 0.45
+      min_transition_quality_percentile: 0.45
+      min_consistency_percentile: 0.40
+      max_state_quality_rank: 8
+      max_transition_quality_rank: 8
+      max_consistency_rank: 8
+      max_state_expectancy_variance: 0.0015
+      max_transition_expectancy_variance: 0.0020
+      max_state_sharpe_variance: 1.4
+      max_transition_sharpe_variance: 1.6
+      top_state_family_count: 2
+      top_n_per_rebalance_date: 4
+      top_n_per_asset_class: 2
+    risk:
+      stop_atr_multiple: 2.5

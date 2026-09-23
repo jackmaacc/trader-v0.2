@@ -1,0 +1,221 @@
+# Research only; thresholds are engineering limits, not optimized profit settings.
+logging:
+  level: INFO
+storage:
+  cache_dir: artifacts/cache
+  output_dir: artifacts/risk_controlled
+universe:
+  equities:
+  - HCKT
+  - POWL
+  - SMCI
+  - ZUMZ
+  - MYGN
+  - ACB
+  - AVIR
+  - PK
+  - ALNY
+  - PTC
+  - GOGO
+  - CG
+  - CLBT
+  - TCX
+  - VFS
+  - IIIV
+  - CBRL
+  - SDGR
+  - TROX
+  - REYN
+  - CDIO
+  - CRAI
+  - HST
+  - XRAY
+  - MNRO
+  - EBC
+  - RAMP
+  - KLIC
+  - WTFC
+  - KLAC
+  - ROAD
+  - SBUX
+  - GOOGL
+  - CMTL
+  - PTCT
+  - AKAM
+  - RGLD
+  - IMXI
+  - ALEC
+  - QLYS
+  - VITL
+  - NEXT
+  - DUOL
+  - PFG
+  - OUST
+  - ROP
+  - FRPT
+  - MBUU
+  - CPB
+  - AXGN
+  - ENGN
+  - ECHO
+  - VICI
+  - AMLX
+  - SNPS
+  - TXN
+  - MRVL
+  - MCRB
+  - VC
+  - FTS
+  - UCTT
+  - EWBC
+  - TARS
+  - LAUR
+  - VRSN
+  - SKYW
+  - LE
+  - ASTS
+  - RNAC
+  - LEVI
+  - BANR
+  - PCAR
+  - IFBD
+  - IBOC
+  - AOSL
+  - PARR
+  - NDSN
+  - NVST
+  - BBSI
+  - MEDP
+  - INVH
+  - OKTA
+  - NMIH
+  - NECB
+  - BMRC
+  - OABI
+  - SPRY
+  - WRLD
+  - ADUS
+  - SYBT
+  - FIVN
+  - WWD
+  - ELVN
+  - HTZ
+  - BWEN
+  crypto: []
+data:
+  historical_provider: yfinance
+  live_provider: mock
+  start_date: 2020-01-01
+  end_date: null
+  interval: 1d
+  adjust_prices: true
+  use_cache: true
+  min_history_bars: 250
+features:
+  return_horizons:
+  - 1
+  - 5
+  - 10
+  - 20
+  atr_window: 14
+  volatility_window: 20
+  rsi_window: 14
+  moving_average_windows:
+  - 10
+  - 20
+  - 50
+  zscore_window: 20
+  volume_window: 20
+  bars_per_year_equity: 252
+  bars_per_year_crypto: 365
+states:
+  model_name: composite_rule
+  trend_threshold: 0.01
+  volatility_zscore_threshold: 0.5
+  momentum_threshold: 0.02
+  extension_threshold: 1.5
+  rsi_overbought: 70
+  rsi_oversold: 30
+markov:
+  transition_horizon_bars: 1
+  forward_return_horizon_bars: 5
+  min_state_observations: 25
+  laplace_smoothing: 1.0
+  transition_lookback_bars: null
+signals:
+  min_training_bars: 175
+  min_expected_value: 0.001
+  min_confidence: 0.08
+  transaction_cost_bps: 5.0
+  slippage_bps: 5.0
+  volatility_penalty: 0.1
+  liquidity_threshold: 1000000
+  liquidity_penalty: 0.001
+  allow_short_equities: false
+  allow_short_crypto: true
+risk:
+  initial_capital: 100000
+  max_position_pct: 0.1
+  max_gross_exposure: 0.5
+  max_concurrent_positions: 10
+  stop_atr_multiple: 2.0
+  max_daily_loss_pct: 0.03
+  volatility_target: null
+  max_trade_risk_pct: 0.0025
+  max_portfolio_stop_risk_pct: 0.01
+  max_pairwise_correlation: 0.6
+  correlation_lookback_bars: 60
+backtest:
+  hold_bars: 5
+  exit_on_state_change: true
+  exit_on_signal_flip: true
+  commission_bps: 2.0
+  slippage_bps_equity: 2.0
+  slippage_bps_crypto: 5.0
+  annualization_factor: 252
+  use_atr_stop: true
+execution:
+  paper_enabled: false
+  broker_name: paper
+  journal_dir: artifacts/latest/paper
+dashboard:
+  artifacts_dir: artifacts/risk_controlled
+research:
+  walk_forward:
+    enabled: true
+    train_bars: 252
+    validation_bars: 63
+    test_bars: 63
+    step_bars: 63
+    refit_on_validation_for_test: true
+    minimum_symbol_train_bars: 126
+  parameter_sweep:
+    enabled: false
+    search_space: {}
+    max_combinations: 64
+    rank_metric: mean_test_sharpe
+    top_k: 25
+  diagnostics:
+    top_n_trades: 25
+    min_group_observations: 5
+asset_overrides:
+  equity:
+    states:
+      trend_threshold: 0.008
+      momentum_threshold: 0.015
+    signals:
+      min_expected_value: 0.0007
+      volatility_penalty: 0.09
+      liquidity_penalty: 0.0008
+  crypto:
+    states:
+      trend_threshold: 0.015
+      momentum_threshold: 0.03
+      extension_threshold: 1.8
+    markov:
+      transition_lookback_bars: 180
+      min_state_observations: 18
+    signals:
+      min_expected_value: 0.0012
+      volatility_penalty: 0.14
+      liquidity_penalty: 0.0015

@@ -1,0 +1,29 @@
+# One fixed intraday research candidate, not a deployed trading strategy.
+feed: sip
+symbols: [GOOGL, SMCI, MRVL, TXN, KLAC, SBUX, SNPS, ASTS, ROP, DUOL]
+strategy:
+  initial_capital: 100000
+  opening_minutes: 15
+  volume_lookback: 20
+  relative_volume: 1.5
+  min_minute_dollars: 250000
+  min_price: 5
+  execution_delay_minutes: 2
+  atr_multiple: 1.5
+  reward_risk: 2
+  min_reward_cost_multiple: 3
+  risk_per_trade: 0.001
+  portfolio_stop_risk: 0.005
+  max_position: 0.1
+  max_gross: 0.5
+  max_positions: 5
+  daily_loss_limit: 0.01
+  max_entries_per_day: 50
+  max_entries_per_symbol: 3
+  cooldown_minutes: 5
+  max_hold_minutes: 30
+  flatten_minutes: 5
+  participation: 0.01
+  one_way_cost_bps: 7
+  max_correlation: 0.6
+  correlation_minutes: 30
