@@ -1211,7 +1211,10 @@ def _run_etf_replay(frames_by_symbol, spec, initial_capital=100000., *, schedule
                 cluster=sum(p['qty']*marks[k] for k,p in positions.items() if k in ('SPY','QQQ','IWM'))
                 cap=min(spec.max_gross,spec.max_overnight) if spec.family=='MOM' else spec.max_gross
                 per_cost=px*(1+commission)-raw
-                stop_cost=px*(1+commission)-(px-distance)*(1-impact)*(1-commission)
+                # A newly marketable protective stop exits at the executable open,
+                # never at a stop above that open after modeled entry impact.
+                sizing_stop=min(px-distance,raw)
+                stop_cost=px*(1+commission)-sizing_stop*(1-impact)*(1-commission)
                 limits=[cash/(px*(1+commission)),spec.max_trade_risk*eq/stop_cost,
                         max(0,spec.max_portfolio_risk*eq-risk)/(stop_cost+spec.max_portfolio_risk*per_cost),
                         max(0,cap*eq-gross)/(raw+cap*per_cost),spec.max_name*eq/(raw+spec.max_name*per_cost)]
@@ -1226,7 +1229,7 @@ def _run_etf_replay(frames_by_symbol, spec, initial_capital=100000., *, schedule
             for s,p in list(positions.items()):
                 if s not in rows:continue
                 r=rows[s]
-                if r.low<=p['stop']:close(s,t,p['stop'],'stop')
+                if r.low<=p['stop']:close(s,t,min(float(r.open),p['stop']),'stop')
                 elif p['target'] is not None and r.high>=p['target']:close(s,t,p['target'],'target')
             for s,r in rows.items():marks[s]=float(r.close)
             halt_check()

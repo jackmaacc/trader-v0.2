@@ -258,3 +258,31 @@ def test_dividend_payment_after_sale_settles_once():
     assert r.metrics['dividends_paid']==pytest.approx(entitled)
     assert r.equity_curve.iloc[-1].cash==pytest.approx(100000+entitled)
     assert r.metrics['net_pnl']==pytest.approx(entitled)
+
+
+def test_entry_stop_above_open_fills_at_open_and_sizes_full_loss(monkeypatch):
+    from trader_engine.research.etf_candidates import ETFDecision
+    import trader_engine.research.etf_candidates as candidates
+    frames,schedule,_=fixture_data(1)
+    signal=schedule.market_open.iloc[0]+pd.Timedelta(minutes=5)
+    for symbol,f in frames.items():
+        next_bar=f.loc[[signal]].copy();next_bar.index+=pd.Timedelta(minutes=1)
+        frames[symbol]=pd.concat([f,next_bar]).sort_index()
+    # $100.60 impacted entry, $0.015 stop distance => stop above $100 raw open.
+    # Budget must cover the entire executable roundtrip, not the smaller ATR distance.
+    monkeypatch.setattr(candidates,'mean_reversion_session_decisions',lambda f,spec:{
+        t:ETFDecision(t==signal,'qualified',3.,.01,110.) for t in f.index})
+    spec=StrategySpec('MR30',slippage_bps=60,commission_bps=2)
+    r=BacktestEngine.run_etf_replay(frames,spec,schedule=schedule)
+    assert len(r.trades)==5
+    exits=r.decisions.loc[r.decisions.action=='exit']
+    assert set(exits.reason)=={'stop'}
+    assert np.allclose(exits.price,100*(1-spec.one_way_impact),rtol=0,atol=1e-12)
+    eq=100000.
+    entries=r.decisions.loc[r.decisions.action=='entry'].reset_index(drop=True)
+    for i,entry in entries.iterrows():
+        trade=r.trades.loc[r.trades.symbol==entry.symbol].iloc[0]
+        risk_budget=eq*.001
+        assert -trade.pnl<=risk_budget+1e-8
+        # Entries are accepted before the simultaneous intrabar stop processing.
+        eq-=entry.quantity*(entry.price*(1+spec.commission_rate)-100)
