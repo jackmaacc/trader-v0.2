@@ -9,6 +9,7 @@ from types import CodeType, FunctionType
 from trader_engine.execution import portfolio as reservations
 from trader_engine.operations import accounting_ledger, decision_ledger
 from . import phase3_daily as daily, phase3_portfolio as portfolio, phase3_store as store
+from . import phase3_actions as actions
 from . import protocol_registry
 
 SUPPORTED_REGISTRY = 'b33d9064bb674f3948ac4b004a3ec88ad4553e08236ad42e5278741a6f4bedf0'
@@ -20,7 +21,7 @@ def _verified_sources():
     This guards accidental hot edits, not a hostile interpreter or runtime monkey
     patching. Python/library dependencies still need a separate release manifest.
     """
-    modules = [daily, portfolio, store, reservations, accounting_ledger, decision_ledger,
+    modules = [daily, portfolio, store, reservations, accounting_ledger, decision_ledger, actions,
                protocol_registry, sys.modules[__name__]]
     hashes = {}
     for module in modules:
@@ -74,6 +75,9 @@ def _marks(values):
 
 def _transition(state, operation):
     kind = operation['kind']
+    if kind == 'corporate_action':
+        new, receipt = actions.apply_corporate_action(state, operation['event'], operation['now'])
+        return {'state': new, 'result': receipt}
     if kind == 'baseline':
         new = portfolio.set_day_baseline(state, date.fromisoformat(operation['utc_day']),
                                         _decimal(operation['prior_close_equity']),

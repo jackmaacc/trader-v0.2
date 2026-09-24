@@ -8,6 +8,7 @@ import json
 from typing import Mapping
 
 from trader_engine.execution.portfolio import Reservations
+from .phase3_actions import receivable_value
 from .phase3_daily import (CRYPTO, EQUITIES, UNIVERSES, EntryPlan, FeeSchedule,
                           PortfolioSnapshot, PriceObservation, SignalDecision,
                           estimate_entry, estimate_exit, plan_entry, _fees)
@@ -58,7 +59,7 @@ def initial_state(strategy_id, utc_day, prior_utc_close_equity=None):
             'positions': {}, 'pending_exits': [], 'utc_day': utc_day.isoformat(),
             'prior_utc_close_equity': None, 'baseline_provenance': None,
             'entry_halted': False, 'batches': {}, 'modeled_fills': [],
-            'attempted_entries': {}, 'closed_sessions': {}, 'last_applied_at': None,
+            'attempted_entries': {}, 'closed_sessions': {}, 'last_applied_at': None, 'last_portfolio_at': None,
             'execution_authorized': False, 'live_approved': False}
 
 
@@ -91,6 +92,7 @@ def validate_state(state):
         for value in state[name].values(): date.fromisoformat(value)
     if state['last_applied_at'] is not None: _utc(datetime.fromisoformat(state['last_applied_at']))
     json.dumps(state, allow_nan=False)
+    receivable_value(state)
 
 
 def set_day_baseline(state, utc_day, prior_close_equity, *, boundary_at, provenance):
@@ -133,7 +135,7 @@ def _snapshot(state, marks, now):
         if _utc(mark.event_at) != _utc(now) or not _utc(mark.event_at) <= _utc(mark.received_at) <= _utc(now):
             raise ValueError('portfolio mark not available at exact research valuation boundary')
     gross = sum((D(quantity)*marks[symbol].price for symbol, quantity in state['positions'].items()), D(0))
-    cash = D(state['cash']); equity = cash+gross
+    cash = D(state['cash']); equity = cash+gross+receivable_value(state)
     baseline = None if state['prior_utc_close_equity'] is None else D(state['prior_utc_close_equity'])
     limit = D('.01') if state['strategy_id'] == EQUITIES else D('.03')
     if baseline is not None and equity <= baseline*(1-limit): state['entry_halted'] = True
@@ -329,7 +331,8 @@ def _apply_batch(state, batch_id, observations, marks, now, *, stress):
     except ValueError:
         snapshot = None
     report = dict(batch_id=batch_id, modeled_fills=fills, blocked=blocked,
-                  cash=result['cash'], equity=str(snapshot.equity) if snapshot is not None else None,
+                  cash=result['cash'], receivables=str(receivable_value(result)),
+                  equity=str(snapshot.equity) if snapshot is not None else None,
                   gross=str(snapshot.gross) if snapshot is not None else None,
                   valuation_available=snapshot is not None,
                   valuation_basis='exact_research_boundary_marks_not_independent_provenance_verification',
@@ -339,6 +342,7 @@ def _apply_batch(state, batch_id, observations, marks, now, *, stress):
                   evidence_scope='offline_modeled_portfolio_not_broker_fills')
     result['modeled_fills'].extend(fills)
     result['last_applied_at'] = _utc(now).isoformat()
+    result['last_portfolio_at'] = _utc(now).isoformat()
     result['batches'][batch_id]['apply_hash'] = digest
     result['batches'][batch_id]['report'] = report
     validate_state(result)

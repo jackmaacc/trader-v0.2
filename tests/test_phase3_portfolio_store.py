@@ -58,7 +58,7 @@ def test_actual_portfolio_persists_plans_fills_and_restart_without_duplicates(tm
     again=record(db,'execute',execute())
     assert not again['inserted'] and again['state']==result['state']
     assert len(read_state(db)['state']['modeled_fills'])==3
-    assert len(result['source_hashes'])==8
+    assert len(result['source_hashes'])==9
     assert not result['execution_authorized'] and not result['prospective_credit']
 
 
@@ -168,3 +168,27 @@ def test_equity_modeled_roundtrip_reconciles_through_independent_fifo_accounting
     assert Decimal(report['metrics']['identity_difference'])==0
     assert Decimal(report['metrics']['realized_net'])==Decimal(closed['state']['cash'])-Decimal('100000')
     assert len(report['matches'])==3
+
+
+def test_dividend_receivable_and_payment_survive_durable_restart(tmp_path):
+    db=tmp_path/'state.db';record(db,'baseline',baseline());record(db,'prepare',prepare())
+    bought=record(db,'execute',execute())
+    cash=bought['state']['cash'];qty=bought['state']['positions']['SPY']
+    at='2026-10-02T13:30:00Z'
+    event=dict(id='dividend1',kind='cash_dividend',symbol='SPY',quantity_before=qty,
+               amount_per_share='1',currency='USD',effective_at=at,received_at=at,
+               payment_at=None,source_sha256='a'*64)
+    record(db,'dividend',{'kind':'corporate_action','event':event,'now':at})
+    restarted=read_state(db)['state']
+    assert restarted['cash']==cash
+    assert restarted['corporate_actions']['receivables']['dividend1']['amount']==qty
+    assert not restarted['corporate_actions']['receivables']['dividend1']['paid']
+    paid='2026-10-09T12:00:00Z'
+    payment=dict(id='payment1',kind='dividend_payment',dividend_id='dividend1',amount=qty,
+                 currency='USD',effective_at=paid,received_at=paid,source_sha256='b'*64)
+    operation={'kind':'corporate_action','event':payment,'now':paid}
+    result=record(db,'paid',operation)
+    assert Decimal(result['state']['cash'])==Decimal(cash)+Decimal(qty)
+    assert result['state']['corporate_actions']['receivables']['dividend1']['paid']
+    again=record(db,'paid',operation)
+    assert not again['inserted'] and again['state']==result['state']
