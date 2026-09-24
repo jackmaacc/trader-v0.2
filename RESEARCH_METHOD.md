@@ -57,3 +57,9 @@ Each stage can fail. Neither a historical profit nor the new research helper aut
 ```
 
 Use a new output directory for each audit. The recorded fills and their source fingerprint are preserved. This command reads local artifacts and does not contact a broker.
+
+## Completed daily-pattern implementation and evaluation
+
+The September 23 daily build implements four frozen slower ETF rules through the shared engine's explicit daily path. Completed 32 candidate replays and 16 benchmark executions (four benchmark references repeat, for 44 effective configurations). All candidate scenarios were net-positive under the fixed assumptions; none passed the frozen buy-and-hold raw-return hurdle. Average exposure was only 3.54%–10.25%. Monthly trend following was the strongest development lead, but sparse episodes, recent GLD concentration and data limitations prevent an edge or promotion claim.
+
+The new path separates close decisions from later raw-open fills and preserves split/dividend/receivable accounting, pending exits and open-position P&L. Independent reconstruction verified 58,656 daily records and 2,038 transactions. Provisional QQQ dividend correction, unknown payment/availability provenance and uncalibrated costs remain explicit. All artifacts remain development-only. See `docs/DAILY_PATTERN_PROTOCOL.md`, `docs/DAILY_PATTERN_RESULTS.md` and `docs/DAILY_PATTERN_AUDIT.md`. No additional tuning, new role, recurring service or broker action followed from these results.

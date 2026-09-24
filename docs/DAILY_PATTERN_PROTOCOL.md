@@ -1,0 +1,34 @@
+# Daily pattern experiment — frozen before results
+
+September 23, 2026. The user's instruction to find a pattern and make an algorithm authorizes local implementation and historical evaluation of the four previously shown hypotheses. This does not authorize broker activity. Stay on the free plan. MR30/MR60/MOM20/MOM60 remain retained failures and are not retuned.
+
+## Scope
+
+Implement H1–H4 from NEXT_HYPOTHESES.md through an explicit daily path on the shared BacktestEngine, not by passing daily bars into the minute engine. Fixed universe SPY, QQQ, IWM, TLT, GLD; $100,000 initial cash for every independently evaluated portfolio. Four hypotheses, not a parameter search. No strategy rule changes after looking at outcomes. All examined history is development evidence.
+
+The fixed scenarios per hypothesis and benchmark are zero execution cost (counterfactual), 7 basis points adverse cost per side (base), 14 basis points per side (stress), and 7 basis points per side with execution delayed one extra session. Two windows: 2016–2023 development with the first 252 actual sessions for warmup only, and January 2024–September 23, 2026 consumed-history diagnostic. Maintain daily accounting even after a halt. This is 32 candidate replays, plus 16 benchmark executions (100% and 25% invested), if inputs pass the structural audit. Static benchmarks always initialize at the first eligible window open; candidate delay does not shift the reference. Consequently four delayed-scenario benchmark rows repeat their base reference: 48 executions but 44 effective configurations (32 candidate, 12 distinct benchmark, 4 reference repetitions). Zero-cost reruns may change sizing and halts; they are not fixed-transaction cost attribution.
+
+## Clarifications fixed before outcomes
+
+- H1/H2/H3 target slots size new episodes only. Continuing holdings are not periodically reset to slot weights; required exposure-cap reductions still apply. H4 alone uses its monthly allocation rebalance band. H1/H4 may hold for months; no claim that every trade lasts only weeks.
+- Plan the initial fixed protective stop from the signal's raw close minus three times ATR20 in the signal date's raw scale. This resolves the draft's contradictory fill-anchored stop and gap-breach wording. The next executable open at or below that planned stop cancels entry. Plan quantity at the signal close; only reduce it at execution to satisfy cash, exposure and risk limits. Do not increase it after seeing the open. A price gap above the signal increases risk to the fixed stop and can reduce quantity.
+- H4 additions keep the episode stop; subtract existing episode risk from the position and aggregate budgets. Partial reductions allocate cost basis, distributions and entry costs proportionally. Split adjustments preserve economic quantity, stop and basis consistently.
+- Gross equity is net equity plus cumulative modeled execution drag for the exact same transactions. Gross daily expectancy includes cash days and uses prior gross equity; net return uses prior net equity. Report closed-episode expectancy separately and include open P&L in portfolio equity. A zero-cost replay is a separately labeled counterfactual.
+- Daily research stop/halt requests execute at a subsequent open, never the same close or an assumed intraday stop price. Model open gaps and delayed exits honestly. The daily path does not certify continuous intraday risk compliance.
+- Actual risk sizing can invest much less than the 25% maximum sleeve. Report average and maximum exposure, not just nominal weights. The primary 100%basket raw-return hurdle remains unchanged; the 25%basket is secondary. A mostly-cash portfolio can fail that hurdle while reducing drawdown; this does not establish or disprove a risk-adjusted edge by itself.
+
+## Data and audit
+
+Use hash-verified archived raw daily OHLC for execution and separate adjusted/total-return history for signals. Verify full exchange calendar, daily observations and dividend/split coverage, including refreshed September2026 distributions. Do not multiply rounded normalized OHLC to reconstruct an available exact raw execution price. Unknown publication/revision times and exact broker dividend credit times remain explicit diagnostic limitations. Never silently drop a missing day, rewrite prior artifacts, forward-fill an executable price or invent a payment.
+
+Before outcomes, save the protocol and hashes of source, data and this specification to a unique campaign directory. Require causal-prefix tests, next-open timing tests, split/dividend accounting, partial reductions, no spending unpaid receivables, gap handling, halts, cooldowns and same-fill gross/net reconciliation. Run independent review of the implementation and results. Use bounded local execution; estimate headroom and retain every scenario, ledger, trade and failure. No new framework, role, subscription, scheduler or live service.
+
+## Selection and interpretation
+
+Retain the eligibility and selection criteria in NEXT_HYPOTHESES.md: positive gross/base net, positive base terminal excess over primary 100%basket, positive stress/delay net, no 3% drawdown termination, annualized turnover <= 2, complete qualifying evidence. If multiple candidates pass, choose the highest development base excess, then lower turnover, then hypothesis ID. Consumed diagnostic history may veto this candidate but cannot replace it with another. Missing qualification evidence blocks promotion regardless of a positive modeled return. Report results even if all candidates fail.
+
+The proposed October 1, 2026–September 30, 2027 future confirmation remains untouched and unscheduled. Registration requires a candidate and reconciled review protocol frozen before its start. No historical result is a fresh holdout; no 1% daily return promise, early success declaration, or automatic deployment.
+
+## Pre-outcome data correction
+
+The audit found two conflicting QQQ cash-dividend records for September 19, 2022. A separate provisional input bundle keeps the October 31 payment record and removes the conflicting September 23 payment record, preserving both originals and the exact revision evidence. Indexed issuer information supports a single 0.51856 distribution payable October 31; the currently retrieved issuer URL redirects to a new page, so this is explicitly provisional evidence. Signal total returns are reconstructed forward from raw closes and corrected recorded distributions, avoiding the archived adjusted-price series that reflects the duplicated event. Raw split-adjusted OHLC supplies ATR. Missing historical payment dates remain unspendable receivables. An unresolved SPY 2026 adjustment discrepancy and unknown historical publication/revision times keep all resulting outcomes diagnostic and nonqualifying; they cannot authorize promotion. This accounting correction is fixed before evaluating strategy outcomes, not selected to improve a return.

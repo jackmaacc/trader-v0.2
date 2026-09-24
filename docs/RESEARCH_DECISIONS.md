@@ -27,3 +27,7 @@ Parquet index metadata for all five archived daily files reports 2,696 rows, Jan
 Completed: a written shortlist and evaluation proposal only. Not completed or authorized by this writing task: candidate implementation, parameter search, historical replay, statistical result, paid plan, provider credentials, prospective automation, paper/live orders, or promotion.
 
 Next decision: approve or revise the concrete hypothesis rules, primary benchmark, fixed data windows and rejection/confirmation criteria before freezing or running anything. If the user changes a rule before any outcome is inspected, document the replacement transparently; after outcomes are seen, a changed rule is a new attempted hypothesis requiring a new future confirmation interval. A failed test is retained, not tuned until it passes.
+
+## Subsequent implementation authorization
+
+The user's subsequent instruction, "find the pattern. make an algo," authorizes local implementation and historical evaluation following the four-hypothesis shortlist. The concrete pre-outcome protocol and clarified execution rules are in `docs/DAILY_PATTERN_PROTOCOL.md`. This supersedes the earlier pending status for this local research step only. The free plan remains selected; prior failed MR/MOM families are not retuned. No broker activity, automatic promotion or prospective registration follows from this authorization.

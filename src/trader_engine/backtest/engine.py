@@ -1278,3 +1278,12 @@ def _etf_mark_to_stop_risk(quantity,mark,stop,impact,commission):
 
 # Explicit opt-in API preserves the existing event engine and its legacy callers.
 BacktestEngine.run_etf_replay = staticmethod(_run_etf_replay)
+
+
+def _run_daily_etf_replay(*args, **kwargs):
+    """Explicit daily adapter; preserves legacy minute execution semantics."""
+    from trader_engine.backtest.daily_etf import run_daily_etf_replay
+    return run_daily_etf_replay(*args, **kwargs)
+
+
+BacktestEngine.run_daily_etf_replay = staticmethod(_run_daily_etf_replay)
