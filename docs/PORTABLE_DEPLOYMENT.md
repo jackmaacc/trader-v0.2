@@ -38,6 +38,12 @@ The environment interface is `APCA_API_KEY_ID` and `APCA_API_SECRET_KEY`. On Lin
 
 The checked dependency ranges follow current `pyproject.toml`; this is not a cross-platform lockfile or reproducible build. Freeze and review exact resolved versions before a production cutover. Clock/network/Alpaca access and filesystem durability need host acceptance tests. A successful preflight means local configuration is renderable, never that trading is safe or active.
 
+## Service installation scope
+
+The systemd templates are intended for the dedicated unprivileged runtime user’s **user manager**, not `/etc/systemd/system`. They omit `User=` and must not be installed as root system services. Before installation, verify `systemctl --user` availability and the chosen user manager startup mechanism after Windows reboot without an interactive login. The current host probe labels its system-manager observation explicitly; that observation does not verify the user manager or workers. User-manager network targets do not establish Internet availability. Worker reconnect behavior needs its own test.
+
+Microsoft states that systemd services do not keep a WSL instance alive. Actual Windows startup and runtime persistence therefore require separate evidence; enabling systemd alone is insufficient. [Microsoft WSL systemd documentation](https://learn.microsoft.com/en-us/windows/wsl/systemd).
+
 ## Defaults that prevent an accidental second writer
 
 Every LaunchAgent example is `Disabled=true`, `RunAtLoad=false`, `KeepAlive=false`. Read-only systemd examples include an install target but are not installed/enabled by this project. The paper crypto and paper trial units have **no install target**, no restart loop, an absent-by-default `PAPER_OBSERVATION_ENABLED` condition, and, for paper crypto, only `--observe-only`. The trial unit requires its separate `PAPER_TRIAL_OBSERVATION_ENABLED` marker and receives no credentials. Creating that marker permits observation only; it does not permit orders. Paper execution requires a separately approved, reviewed cutover and deliberate command change. No renderer flag enables it.
@@ -77,8 +83,12 @@ SSH's `-L` supports an explicit loopback bind address. [OpenSSH manual](https://
 
 Deploy an explicit reviewed commit; never run an automatic `git pull` inside an execution service. Keep a version/dependency manifest with each deployment. Update and test a separate checkout/environment while the running version remains stable. Preserve state schema compatibility, stop/reconcile before changing the execution owner, and restart only after approval. Logs, environment files, deployment manifests with local identifiers, downloaded datasets and account state stay outside Git. Existing ignore rules must be checked before staging; ignore rules do not protect already tracked files.
 
-Phase 1 does not provide cross-host fencing, high availability, automatic failover, remote command authorization, native Windows support, guaranteed PC wake/boot operation or completed PC verification. Those require explicit implementation and host testing before claiming unattended reliability.
+The current implementation does not establish cross-host fencing or PC boot/recovery. Verified source fencing and actual PC recovery remain mandatory Phase 1 exit gates, not exemptions. High availability, automatic failover and native Windows support are outside this deployment design. See [PHASE1_ACCEPTANCE.md](PHASE1_ACCEPTANCE.md) for pending evidence.
 
 ## Release and recovery tools
 
 [RELEASE_WORKFLOW.md](RELEASE_WORKFLOW.md) describes clean-commit receipts and host-specific revalidation. [TRIAL_BACKUPS.md](TRIAL_BACKUPS.md) provides online observation-ledger snapshots and isolated restore exercises. Both are local tools; neither deploys services or activates orders. The September 24 Mac exercise verified a real ledger snapshot and isolated copy while the original observer retained its history. Scheduled/off-machine backups and full execution-state recovery remain pending.
+
+## Local host evidence probe
+
+Run `.venv/bin/python scripts/probe_runtime_host.py --manifest /absolute/path/runtime.json --output /absolute/path/new-host-report.json` on the target host. The output parent must exist; reports are exclusive, owner-only files. This bounds local interpreter, supervisor and clock probes and records actual Linux mount types, disk headroom and a Linux boot identity where available. It does not read credentials or contact the broker. Unknown checks stay unverified. Exit zero means no failed local checks, not complete acceptance; execution and PC-acceptance flags remain false. A Linux boot ID cannot establish a Windows reboot.
