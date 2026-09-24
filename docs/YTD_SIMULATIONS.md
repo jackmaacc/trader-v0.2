@@ -1,5 +1,7 @@
 # Chronological YTD execution sensitivity
 
+For the September 24 campaign on the current H1/crypto research models, see [YTD_100000_RESULTS.md](YTD_100000_RESULTS.md) and its [frozen protocol](YTD_100000_PROTOCOL.md). The 100,000-trial driver is `scripts/run_current_ytd_100000.py`, with explicit `freeze` and `run` stages. It is fixed to the documented September 23, 2026 cutoff and is not an automatically current-date runner. The reproduction below is the older retained-failure ETF campaign.
+
 10,000 complete chronological scenarios: 2,500 each for MR30, MR60, MOM20 and MOM60 on SPY, QQQ, IWM, TLT and GLD. Each retains all 182 completed 2026 sessions and starts flat with $100,000. Pre-2026 daily history warms up signals. Shared Python signals feed a C++17 continuous ledger; 24 full histories must match the Python reference before the batch starts. This is not a bootstrap.
 
 ## Reproduction

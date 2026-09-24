@@ -12,6 +12,8 @@ The coordinator supplies the objective, input locations, allowed changes, output
 
 ## Existing implementation
 
+The newer `scripts/run_current_ytd_100000.py` runs the September 24 H1/CRYPTO_SMA200 campaign with separate freeze/run stages, batched ledgers and reference parity. Read `docs/YTD_100000_PROTOCOL.md` and `docs/YTD_100000_RESULTS.md` first. Its date range, count and strategy scope are also fixed; do not call it fresh YTD after its endpoint without a reviewed new protocol.
+
 Read these before choosing commands:
 
 - `scripts/run_etf_ytd_10000.py`: the existing 10,000-run driver.
