@@ -63,7 +63,7 @@ class Instrument(BaseModel):
 
 
 def fetch_text(url: str) -> str:
-    request = Request(url, headers={'User-Agent': 'TRADER2.0 market directory research/1.0'})
+    request = Request(url, headers={'User-Agent': 'trader-v0.2 market directory research/1.0'})
     with urlopen(request, timeout=30) as response:
         data = response.read(20_000_001)
     if len(data) > 20_000_000:

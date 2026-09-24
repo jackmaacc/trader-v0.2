@@ -22,13 +22,13 @@ CORE_STATE_ARTIFACTS = {
 
 
 def render_dashboard(artifacts_dir: Path) -> None:
-    st.set_page_config(page_title="TRADER2.0 Research Engine", layout="wide")
+    st.set_page_config(page_title="trader-v0.2 Research Engine", layout="wide")
     _inject_styles()
 
     st.markdown(
         """
         <div class="hero">
-          <div class="eyebrow">TRADER2.0</div>
+          <div class="eyebrow">trader-v0.2</div>
           <h1>Quantitative Research & Trading Engine</h1>
           <p>Probabilistic market-state modeling, Markov transitions, robustness diagnostics, and out-of-sample sensitivity analysis.</p>
         </div>

@@ -1,6 +1,6 @@
 # Simulation agent
 
-Use `simulation_runner` for recurring simulation work in TRADER2.0. This is an on-demand Codex project specialist; creating the role does not start a simulation or create an automation.
+Use `simulation_runner` for recurring simulation work in trader-v0.2. This is an on-demand Codex project specialist; creating the role does not start a simulation or create an automation.
 
 ## Invocation
 

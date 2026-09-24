@@ -1,8 +1,8 @@
-# TRADER2.0
+# trader-v0.2
 
 The fixed ETF research program and five advisory specialists are documented in [NET_EDGE.md](docs/NET_EDGE.md). Start with local analysis or diagnostic shadow; no candidate is authorized for trading by these workflows.
 
-TRADER2.0 is a clean-slate quantitative trading and research platform built around market-state modeling, Markov transition analysis, and expectancy-driven opportunity ranking.
+trader-v0.2 is a clean-slate quantitative trading and research platform built around market-state modeling, Markov transition analysis, and expectancy-driven opportunity ranking.
 
 Phase one is intentionally research-first:
 
@@ -30,7 +30,7 @@ Phase one is intentionally research-first:
 ## Architecture
 
 ```text
-TRADER2.0/
+trader-v0.2/
 ├── app.py
 ├── configs/
 │   └── default.yaml

@@ -14,7 +14,7 @@ from trader_engine.workflows.robustness import RobustnessWorkflow
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the TRADER2.0 parameter sweep workflow.")
+    parser = argparse.ArgumentParser(description="Run the trader-v0.2 parameter sweep workflow.")
     parser.add_argument("--config", default="configs/robustness.yaml", help="Path to the YAML config file.")
     args = parser.parse_args()
 

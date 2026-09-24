@@ -14,7 +14,7 @@ from trader_engine.workflows.research import ResearchWorkflow
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the TRADER2.0 research workflow.")
+    parser = argparse.ArgumentParser(description="Run the trader-v0.2 research workflow.")
     parser.add_argument("--config", default="configs/default.yaml", help="Path to the YAML config file.")
     args = parser.parse_args()
 

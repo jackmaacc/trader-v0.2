@@ -1,4 +1,4 @@
-"""TRADER2.0 research platform."""
+"""trader-v0.2 research platform."""
 
 __all__ = ["__version__"]
 

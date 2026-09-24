@@ -1,4 +1,4 @@
-# TRADER2.0 project agents
+# trader-v0.2 project agents
 
 The user requests ongoing use of specialized agents throughout this project. For substantial work with independent subtasks, delegate to the relevant roles in `.codex/agents/` and coordinate their results. See `docs/AGENT_TEAM.md` for role selection and handoffs. Simple tasks can remain local. Respect the available session concurrency limit; rotate specialists in bounded waves rather than spawning redundant work.
 

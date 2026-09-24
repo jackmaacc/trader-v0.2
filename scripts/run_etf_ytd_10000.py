@@ -117,7 +117,7 @@ def main(argv=None):
     parser.add_argument("--output",required=True)
     parser.add_argument("--workers",type=int,default=6)
     parser.add_argument("--reference-workers",type=int,default=4)
-    parser.add_argument("--project-root",default="/Users/jackmaccutcheon/Projects/Trading/TRADER2.0")
+    parser.add_argument("--project-root",default=str(Path(__file__).resolve().parents[1]))
     args=parser.parse_args(argv)
     if not 1<=args.workers<=8 or not 1<=args.reference_workers<=8: raise ValueError("Use 1-8 workers")
     source=Path(__file__).resolve().parents[1];output=Path(args.output)
