@@ -16,7 +16,7 @@ Accepted September 24, 2026. This is the implementation mandate, not authorizati
 
 | Phase | Deliverable | Exit gate | Current state |
 | --- | --- | --- | --- |
-| 0 Mandate and baseline | This roadmap, service inventory, strategy authority register, milestone tracking | Every component has an owner, purpose and activation boundary | Baseline recorded; account/instrument capability audit pending |
+| 0 Mandate and baseline | This roadmap, service inventory, strategy authority register, milestone tracking | Every component has an owner, purpose and activation boundary | Complete September 24: mandate, ownership/authority inventory, capability baseline and dashboard verified; see PHASE0_ACCEPTANCE.md |
 | 1 Portable operations | Mac paper operation, WSL2 deployment templates, secrets abstraction, preflight, private access runbook | Demonstrated PC boot/recovery, backups/restore, old-writer fencing and alerts | Manifest/preflight/templates and release receipts implemented; local trial-ledger backup/isolated restore verified; PC not accessed or verified |
 | 2 Durable evidence/accounting | SQLite operational trial ledger, immutable research data, source provenance and broker reconciliation | Reconstruct decisions and cash/quantity changes; resolve discrepancies | Operational ledger is first deliverable; full trade accounting remains pending |
 | 3 Parallel strategy research | At most two newly frozen hypotheses per asset-class track; causal costs and passive/risk-matched comparisons | Independent review and sufficient untouched prospective evidence | No new hypotheses promoted; existing failures retained |
@@ -49,3 +49,7 @@ Migration must stop/fence the old account writer, archive and verify state, reco
 ## Delivery rhythm
 
 Each milestone has an implementation owner, offline regression evidence, independent review and explicit limitations. Update this roadmap and release notes with completed work. Weekly reports cover equities/ETFs, options and crypto separately, plus accounting, reliability and remaining blockers. Deploy read-only improvements independently; changes to execution policy require their own reviewed rollout.
+
+## Current stop point
+
+Phase 0 is complete; see [PHASE0_ACCEPTANCE.md](PHASE0_ACCEPTANCE.md) for requirement-by-requirement evidence. At the user's request, stop implementation here. Later phases retain the states above; this closure does not activate trading or stop existing authorized services.

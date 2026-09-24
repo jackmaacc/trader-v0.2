@@ -4,6 +4,7 @@ import json
 import math
 from pathlib import Path
 import streamlit as st
+from trader_engine.ui.capability_audit import render_capability_audit
 
 
 def load(path):
@@ -50,5 +51,6 @@ def render_project_operations(artifacts: Path):
         st.write('Asset-class evidence:', assets)
     st.warning('Live trading is disabled. Thirty days of process health is not thirty days of equity/options paper trading or evidence of profitability.')
     st.caption('Equities/ETFs and options remain separate research workstreams. The current broker writer is the BTC/ETH experiment. Saved account equity is not cash-flow-adjusted performance.')
+    render_capability_audit(artifacts)
     with st.expander('Delivery milestones'):
         st.markdown('1. Mandate and component inventory\n2. Portable operations and remote-access preparation\n3. Durable research and broker accounting\n4. Parallel equity/ETF, options and crypto research\n5. Unified execution and portfolio risk\n6. Prospective paper qualification\n7. Explicit small live pilot and reviewed expansion')
