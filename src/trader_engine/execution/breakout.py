@@ -137,6 +137,8 @@ def hold_breakout(plan,entry,engine,*,get_quote,close_at,should_stop=lambda:Fals
                 diagnostic['decision']='wait_for_event'
                 engine._event({'kind':'holding_quote_accepted',**diagnostic})
                 if engine.storage_failed:raise RuntimeError('Quote evidence could not be persisted')
+                # Keep the normal cadence if wall time remains behind the quote.
+                sleep(min(3,max(0,deadline-monotonic())))
                 continue
         diagnostic.update(decision='profit_target' if bid>=target else ('stop_level' if bid<=stop else 'hold'),
                           stop_price=str(stop),target_price=str(target))

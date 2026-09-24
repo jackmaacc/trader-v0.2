@@ -107,6 +107,7 @@ def test_coordinator_runs_two_positions_and_finishes_flat(tmp_path,monkeypatch):
    finally:b.positions=method
  b.submit=submit
  class Market:
+  def __init__(self,*,feed='iex'):assert feed=='iex'
   def assets(self):return ['SPY','QQQ']
   def shortlist(self,*a):return ['SPY','QQQ'],2,2
   def bars(self,s):return {ticker:bars() for ticker in s}

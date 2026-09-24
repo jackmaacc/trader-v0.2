@@ -8,6 +8,7 @@ from dataclasses import asdict
 from urllib.request import Request,build_opener,HTTPRedirectHandler
 from urllib.parse import urlencode
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
+from trader_engine.data.market_feed import StockFeedConfig
 from trader_engine.execution.alpaca_paper import AlpacaPaperClient,RollingRateLimiter
 from trader_engine.execution.breakout import candidate,hold_breakout
 from trader_engine.execution.journal import ReservedJournal,ExecutionLock
@@ -20,7 +21,9 @@ class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self,*args,**kwargs):return None
 
 class Market:
-    def __init__(self):self.limiter=RollingRateLimiter()
+    def __init__(self,*,feed='iex'):
+        self.feed_config=StockFeedConfig(feed)
+        self.limiter=RollingRateLimiter()
     def get(self,path,params=None,*,broker=False,priority=False):
         self.limiter.acquire(entry=not priority)
         origin='https://paper-api.alpaca.markets' if broker else 'https://data.alpaca.markets'
@@ -35,9 +38,9 @@ class Market:
         if not isinstance(rows,list):raise RuntimeError('Invalid asset list')
         return sorted({r['symbol'] for r in rows if r.get('tradable') and re.fullmatch(r'[A-Za-z0-9_.-]{1,32}',r.get('symbol',''))})
     def quotes(self,symbols):
-        return self.get('/v2/stocks/quotes/latest',{'symbols':','.join(symbols),'feed':'iex'},priority=True)['quotes']
+        return self.get('/v2/stocks/quotes/latest',{'symbols':','.join(symbols),'feed':self.feed_config.feed},priority=True)['quotes']
     def bars(self,symbols):
-        now=utc();params={'symbols':','.join(symbols),'timeframe':'1Min','start':(now-timedelta(minutes=25)).isoformat(),'end':now.replace(second=0,microsecond=0).isoformat(),'feed':'iex','adjustment':'raw','limit':10000,'sort':'asc'}
+        now=utc();params={'symbols':','.join(symbols),'timeframe':'1Min','start':(now-timedelta(minutes=25)).isoformat(),'end':now.replace(second=0,microsecond=0).isoformat(),'feed':self.feed_config.feed,'adjustment':'raw','limit':10000,'sort':'asc'}
         result={};tokens=set()
         for _ in range(20):
             data=self.get('/v2/stocks/bars',params)
@@ -52,7 +55,7 @@ class Market:
         for start in range(0,len(symbols),200):
             if stop.is_set() or utc()>=cutoff:break
             batch=symbols[start:start+200]
-            data=self.get('/v2/stocks/snapshots',{'symbols':','.join(batch),'feed':'iex'})
+            data=self.get('/v2/stocks/snapshots',{'symbols':','.join(batch),'feed':self.feed_config.feed})
             for symbol,row in data.items():
                 if not isinstance(row,dict):continue
                 try:
@@ -65,12 +68,13 @@ class Market:
             covered+=len(batch);progress(covered,len(ranks))
         return sorted(ranks,key=ranks.get,reverse=True)[:200],covered,len(ranks)
 
-def run(out):
+def run(out,*,feed='iex'):
+    feed_config=StockFeedConfig(feed)
     out=Path(out).resolve();out.mkdir(parents=True,exist_ok=False)
     (out/'executor.py').write_text(Path(__file__).read_text())
     stop=threading.Event();jobs={};guard_lock=threading.RLock();result_lock=threading.Lock()
     for sig in (signal.SIGINT,signal.SIGTERM):signal.signal(sig,lambda *_:stop.set())
-    state={'status':'preflight','paper_only':True,'started_at':utc().isoformat(),'target_notional':'15000','position_count_cap':None,'session_loss_cutoff':None,'leverage':False,'protective_stop_pct':1,'target_pct':2,'max_hold_seconds':900,'feed':'iex','universe':'Alpaca active tradable US equities; IEX data availability required','bar_shortlist_limit':200,'journal_capacity':2048,'cycles':0,'completed_round_trips':0,'orders_with_fills':0,'realized_pnl_before_fees':'0','signal_checks':0,'quote_skips':0}
+    state={'status':'preflight','paper_only':True,'started_at':utc().isoformat(),'target_notional':'15000','position_count_cap':None,'session_loss_cutoff':None,'leverage':False,'protective_stop_pct':1,'target_pct':2,'max_hold_seconds':900,**feed_config.to_record(),'universe':f'Alpaca active tradable US equities; {feed.upper()} data availability required','bar_shortlist_limit':200,'journal_capacity':2048,'cycles':0,'completed_round_trips':0,'orders_with_fills':0,'realized_pnl_before_fees':'0','signal_checks':0,'quote_skips':0}
     def persist():
         with guard_lock:
             state['last_checked_at']=utc().isoformat()
@@ -94,7 +98,7 @@ def run(out):
             if account.get('status')!='ACTIVE' or account.get('trading_blocked') or account.get('account_blocked'):raise RuntimeError('Account blocked')
             ledger=Reservations(min(Decimal(account['cash']),Decimal(account['equity'])))
             state.update(status='running',starting_equity=account['equity'],market_close=close.isoformat(),entry_cutoff=cutoff.isoformat(),flatten_at=(close-timedelta(minutes=2)).isoformat())
-            market=Market();symbols=market.assets();state['discovered_symbols']=len(symbols)
+            market=Market(feed=feed);symbols=market.assets();state['discovered_symbols']=len(symbols)
             save(out/'universe.json',symbols);save(out/'protocol.json',state);persist();emit({'event':'START',**state})
             def worker(symbol,plan,quote,signal_row,sizing,job,received_at):
                 result=None;engine=None;failed=False
@@ -104,10 +108,10 @@ def run(out):
                             with guard_lock:job['hold']=info
                             save(Path(job['status_file']),{k:v for k,v in job.items() if k not in ('thread','engine')})
                         def holding(plan,entry,owner):
-                            hold_breakout(plan,entry,owner,get_quote=lambda s:market.quotes([s]).get(s),close_at=close-timedelta(minutes=2),should_stop=stopped,notify=note)
+                            hold_breakout(plan,entry,owner,get_quote=lambda s:market.quotes([s]).get(s),close_at=close-timedelta(minutes=2),should_stop=stopped,notify=note,quote_feed=feed)
                         engine=PaperExecutor(SymbolBroker(broker,symbol),journal,polls=12,hold_callback=holding)
                         with guard_lock:job['engine']=engine
-                        broker.entry_guard=lambda:not stopped() and utc()<cutoff and qualified_quote(quote,utc(),symbol=symbol,received_at=received_at,phase='entry_submission',
+                        broker.entry_guard=lambda:not stopped() and utc()<cutoff and qualified_quote(quote,utc(),symbol=symbol,received_at=received_at,feed=feed,phase='entry_submission',
                             evidence=lambda r:journal.append(r)) is not None and shutil.disk_usage(out).free>=256*1024*1024
                         journal.append({'kind':'sizing_quote','symbol':symbol,'sizing':{k:str(v) for k,v in asdict(sizing).items()},'quote':quote,'decision_at':utc().isoformat(),'breakout_signal':signal_row})
                         result=engine.execute(plan)
@@ -176,14 +180,14 @@ def run(out):
                     if stopped() or utc()>=cutoff:break
                     gross,free=ledger.snapshot()
                     if free<2:break
-                    quote_batch,received_at=fetch_entry_quotes(lambda:market.quotes([symbol]),(symbol,),
+                    quote_batch,received_at=fetch_entry_quotes(lambda:market.quotes([symbol]),(symbol,),feed=feed,
                         evidence=lambda r:record_quote_decision(out/'quote_decisions.jsonl',r))
                     q=quote_batch.get(symbol);time.sleep(.2)
-                    prices=qualified_quote(q,utc(),symbol=symbol,received_at=received_at,
+                    prices=qualified_quote(q,utc(),symbol=symbol,received_at=received_at,feed=feed,
                         evidence=lambda r:record_quote_decision(out/'quote_decisions.jsonl',r))
                     if not prices:state['quote_skips']+=1;continue
                     limit,_=prices
-                    if qualified_quote(q,utc(),symbol=symbol,received_at=received_at,signal_row=row,phase='entry_signal',
+                    if qualified_quote(q,utc(),symbol=symbol,received_at=received_at,feed=feed,signal_row=row,phase='entry_signal',
                         evidence=lambda r:record_quote_decision(out/'quote_decisions.jsonl',r)) is None:state['quote_skips']+=1;continue
                     account=observer.account()
                     size=size_long_entry(config,equity=account['equity'],cash=min(Decimal(account['cash']),free),session_start_equity=state['starting_equity'],entry_price=limit,stop_price=limit*Decimal('.99'),gross_open_notional=gross)
@@ -225,10 +229,10 @@ def run(out):
     return state
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--execute-paper',action='store_true');p.add_argument('--output',type=Path);args=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--execute-paper',action='store_true');p.add_argument('--output',type=Path);p.add_argument('--feed',choices=('iex','sip'),default='iex',help='Explicit stock data feed; SIP requires entitlement; no fallback');args=p.parse_args()
     if not args.execute_paper:
-        print(json.dumps({'mode':'preview_no_orders','position_count_cap':None,'target_notional':15000,'cash_only':True,'session_loss_cutoff':None,'universe':'Alpaca active tradable US equities','screening':'IEX snapshots across universe; completed bars for up to 200 most liquid available symbols','entry_cutoff':'close minus 5 minutes','flatten_at':'close minus 2 minutes'}));return
+        print(json.dumps({'mode':'preview_no_orders',**StockFeedConfig(args.feed).to_record(),'position_count_cap':None,'target_notional':15000,'cash_only':True,'session_loss_cutoff':None,'universe':'Alpaca active tradable US equities','screening':f'{args.feed.upper()} snapshots across universe; completed bars for up to 200 most liquid available symbols','entry_cutoff':'close minus 5 minutes','flatten_at':'close minus 2 minutes'}));return
     if not args.output:raise ValueError('New output directory required')
-    state=run(args.output)
+    state=run(args.output,feed=args.feed)
     if state['status']=='needs_attention':sys.exit(2)
 if __name__=='__main__':main()

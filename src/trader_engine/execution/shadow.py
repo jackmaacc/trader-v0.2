@@ -9,18 +9,20 @@ import pandas as pd
 from trader_engine.agents.team import run_team
 from trader_engine.research.strategy_spec import StrategySpec,ETF_UNIVERSE
 from trader_engine.research.etf_candidates import mean_reversion_decision,momentum_decision
+from trader_engine.data.market_feed import StockFeedConfig
 from trader_engine.data.quote_validation import QuoteEnvelope,QuotePolicy,validate_quote
 
 
 def run_shadow(*, context, histories, quotes, spec:StrategySpec, risk, positions, cash,
                output_dir, session_open, session_close, previous_session_close=None,
-               history_available_at=None):
+               history_available_at=None,expected_feed='sip'):
     """Quotes are QuoteValidationResults; validity is recomputed at context.as_of.
 
     Input histories are caller-supplied completed bars; MOM additionally requires
     explicit latest-history availability and prior session close. No registration
     may be implied by this diagnostic API. Specialist stances cannot change gates.
     """
+    feed_config=StockFeedConfig(expected_feed)
     if context.strategy_hash!=spec.spec_hash or set(context.symbols)!=set(ETF_UNIVERSE):
         raise ValueError('Frozen strategy/context identity mismatch')
     if set(histories)!=set(ETF_UNIVERSE):raise ValueError('Complete fixed-universe history required')
@@ -36,7 +38,7 @@ def run_shadow(*, context, histories, quotes, spec:StrategySpec, risk, positions
     for symbol in ETF_UNIVERSE:
         f=histories[symbol]
         row={'symbol':symbol,'eligible':False,'reason':'unknown','quantity':0,'strategy_hash':spec.spec_hash,
-             'as_of':asof.isoformat(),'mode':'diagnostic_shadow','order_authority':False}
+             'as_of':asof.isoformat(),'mode':'diagnostic_shadow','order_authority':False,**feed_config.to_record()}
         row['history_hash']=sha256(pd.util.hash_pandas_object(f,index=True).values.tobytes()).hexdigest()
         reason=None;signal=None
         if not isinstance(f.index,pd.DatetimeIndex) or f.index.tz is None or not f.index.is_monotonic_increasing or not f.index.is_unique:
@@ -62,9 +64,9 @@ def run_shadow(*, context, histories, quotes, spec:StrategySpec, risk, positions
         if reason is None and not opened+pd.Timedelta(minutes=30)<=asof<closed-pd.Timedelta(minutes=5):reason='outside_execution_window'
         supplied=quotes.get(symbol)
         envelope=(supplied.envelope if supplied is not None else
-                  QuoteEnvelope(symbol,'sip',asof.isoformat(),asof.isoformat(),None))
+                  QuoteEnvelope(symbol,expected_feed,asof.isoformat(),asof.isoformat(),None))
         current=QuoteEnvelope(envelope.symbol,envelope.feed,envelope.received_at,asof.isoformat(),envelope.raw_payload)
-        validation=validate_quote(current,QuotePolicy(expected_feed='sip'),expected_symbol=symbol)
+        validation=validate_quote(current,QuotePolicy(expected_feed=expected_feed),expected_symbol=symbol)
         row['quote']=validation.to_record()
         if supplied is None:reason=reason or 'missing_quote'
         elif not validation.valid:reason=reason or 'invalid_or_stale_quote'
@@ -113,7 +115,7 @@ def run_shadow(*, context, histories, quotes, spec:StrategySpec, risk, positions
             json.dump(value,f,sort_keys=True,default=str,allow_nan=False);f.write('\n');f.flush();os.fsync(f.fileno())
     write('advisory.json',asdict(team))
     write('decisions.json',decisions)
-    write('manifest.json',{'mode':'diagnostic_shadow','formal_forward_run':False,'order_authority':False,
+    write('manifest.json',{'mode':'diagnostic_shadow',**feed_config.to_record(),'formal_forward_run':False,'order_authority':False,
           'strategy':asdict(spec),'strategy_hash':spec.spec_hash,'context_hash':context.input_hash,
           'as_of':asof.isoformat(),'account_risk':asdict(risk.decision())})
-    return {'mode':'diagnostic_shadow','formal_forward_run':False,'team':team,'decisions':decisions,'output_dir':str(out)}
+    return {'mode':'diagnostic_shadow',**feed_config.to_record(),'formal_forward_run':False,'team':team,'decisions':decisions,'output_dir':str(out)}

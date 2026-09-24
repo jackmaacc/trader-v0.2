@@ -249,7 +249,7 @@ def analyze_snapshot(path):
     return report
 
 
-def run_shadow_snapshot(snapshot,registry_path,candidate_id,output):
+def run_shadow_snapshot(snapshot,registry_path,candidate_id,output,*,expected_feed='sip'):
     """Read a local JSON snapshot and produce diagnostic decisions, never orders.
 
     Referenced parquet/risk files are relative to the snapshot directory and may
@@ -259,7 +259,9 @@ def run_shadow_snapshot(snapshot,registry_path,candidate_id,output):
     from trader_engine.agents import Evidence,SharedContext
     from trader_engine.execution.account_risk import AccountRisk
     from trader_engine.execution.shadow import run_shadow
-    from trader_engine.data.quote_validation import QuoteEnvelope,validate_quote
+    from trader_engine.data.market_feed import StockFeedConfig
+    from trader_engine.data.quote_validation import QuoteEnvelope,QuotePolicy,validate_quote
+    feed_config=StockFeedConfig(expected_feed)
     registry,specs=load_registry(registry_path)
     spec=next((s for s in specs if s.candidate_id==candidate_id),None)
     if spec is None:raise ValueError('Unknown frozen candidate')
@@ -289,7 +291,7 @@ def run_shadow_snapshot(snapshot,registry_path,candidate_id,output):
         wrapper=q if isinstance(q,dict) else {}
         envelope=QuoteEnvelope(symbol,wrapper.get('feed','unknown'),wrapper.get('received_at'),
                                context.as_of.isoformat(),wrapper.get('raw_payload',q))
-        quotes[symbol]=validate_quote(envelope,expected_symbol=symbol)
+        quotes[symbol]=validate_quote(envelope,QuotePolicy(expected_feed=expected_feed),expected_symbol=symbol)
     risk_source=local(raw['risk_state'])
     positions=raw.get('positions',[])
     if not isinstance(positions,list):raise ValueError('Positions must be a list')
@@ -305,12 +307,12 @@ def run_shadow_snapshot(snapshot,registry_path,candidate_id,output):
         result=run_shadow(context=context,histories=histories,quotes=quotes,spec=spec,risk=risk,
             positions=positions,cash=raw['cash'],output_dir=output,session_open=raw['session_open'],
             session_close=raw['session_close'],previous_session_close=raw.get('previous_session_close'),
-            history_available_at=raw.get('history_available_at'))
+            history_available_at=raw.get('history_available_at'),expected_feed=expected_feed)
     report=asdict(result['team']);report.update(method='deterministic_evidence_analysis',provider_configured=False)
     report['evidence_sources']={e.source_id:dict(source_url=e.source_url,kind=e.kind,observed_at=e.observed_at.isoformat(),published_at=e.published_at.isoformat(),available_at=e.available_at.isoformat(),vintage_at=e.vintage_at.isoformat() if e.vintage_at else None) for e in evidence}
     write_json(Path(output)/'team_report.json',report)
     write_json(Path(output)/'inputs.json',dict(registry_hash=registry['registry_hash'],source_hashes=hashes,
-        method='local_snapshot_diagnostic',formal_forward_run=False,broker_orders_submitted=0))
+        method='local_snapshot_diagnostic',formal_forward_run=False,broker_orders_submitted=0,**feed_config.to_record()))
     artifact_index(output)
     return dict(mode='diagnostic_shadow',formal_forward_run=False,broker_orders_submitted=0,
-        approved_for_trading=False,decisions=result['decisions'],output_dir=str(output))
+        approved_for_trading=False,decisions=result['decisions'],output_dir=str(output),**feed_config.to_record())

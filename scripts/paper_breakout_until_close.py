@@ -14,6 +14,7 @@ from trader_engine.execution.journal import ReservedJournal,ExecutionLock
 from trader_engine.execution.lifecycle import PaperExecutor,TradePlan
 from trader_engine.execution.sizing import PaperSizingConfig,size_long_entry
 from trader_engine.execution.breakout import candidate,hold_breakout
+from trader_engine.data.market_feed import StockFeedConfig
 from trader_engine.data.quote_validation import QuoteEnvelope,QuotePolicy,validate_quote
 SYMBOLS=['SPY','QQQ','NVDA','AMD','GOOGL','AMZN','META','MSFT','AAPL','TSLA']
 
@@ -32,15 +33,16 @@ def record_quote_decision(path,record):
         f.write(encoded);f.flush();os.fsync(f.fileno())
 
 
-def fetch_entry_quotes(fetch,symbols,*,evidence,now=utc):
+def fetch_entry_quotes(fetch,symbols,*,evidence,now=utc,feed='iex'):
     """Save unavailable entry quote diagnostics without upstream exception text."""
+    feed=StockFeedConfig(feed).feed
     try:
         quotes=fetch()
     except Exception as exc:
         at=now().isoformat()
         for symbol in symbols:
-            record=validate_quote(QuoteEnvelope(symbol,'iex',at,at,None),
-                QuotePolicy(expected_feed='iex')).to_record()
+            record=validate_quote(QuoteEnvelope(symbol,feed,at,at,None),
+                QuotePolicy(expected_feed=feed)).to_record()
             record.update(kind='entry_quote_decision',symbol=symbol,phase='entry_retrieval',
                           valid=False,decision='rejected',retrieval_error=type(exc).__name__,
                           reasons=[*record['reasons'],'quote_retrieval_failed'])
@@ -51,11 +53,12 @@ def fetch_entry_quotes(fetch,symbols,*,evidence,now=utc):
     return quotes,now().isoformat()
 
 
-def qualified_quote(q,now,*,symbol='',received_at=None,evidence=None,phase='entry',signal_row=None):
+def qualified_quote(q,now,*,symbol='',received_at=None,evidence=None,phase='entry',signal_row=None,feed='iex'):
+    feed=StockFeedConfig(feed).feed
     # These are the existing entry limits, with no size requirement added.
-    policy=QuotePolicy(expected_feed='iex',max_source_age_seconds=5,max_cache_age_seconds=5,
+    policy=QuotePolicy(expected_feed=feed,max_source_age_seconds=5,max_cache_age_seconds=5,
                        max_future_skew_seconds=0,max_spread_bps=10,require_sizes=False,min_ask=1)
-    envelope=QuoteEnvelope(symbol,'iex',str(received_at or now.isoformat()),now.isoformat(),q)
+    envelope=QuoteEnvelope(symbol,feed,str(received_at or now.isoformat()),now.isoformat(),q)
     validation=validate_quote(envelope,policy,expected_symbol=symbol)
     q=validation.envelope.raw_payload
     record=validation.to_record()
@@ -91,15 +94,17 @@ def qualified_quote(q,now,*,symbol='',received_at=None,evidence=None,phase='entr
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self,*args,**kwargs):return None
 
-def latest_quotes():
+def latest_quotes(*,feed='iex'):
+    feed=StockFeedConfig(feed).feed
     headers={'APCA-API-KEY-ID':os.environ['APCA_API_KEY_ID'],'APCA-API-SECRET-KEY':os.environ['APCA_API_SECRET_KEY']}
-    req=Request('https://data.alpaca.markets/v2/stocks/quotes/latest?symbols='+','.join(SYMBOLS)+'&feed=iex',headers=headers)
+    req=Request('https://data.alpaca.markets/v2/stocks/quotes/latest?symbols='+','.join(SYMBOLS)+'&feed='+feed,headers=headers)
     with build_opener(NoRedirect).open(req,timeout=10) as r:return json.load(r)['quotes']
 
 
-def latest_bars():
+def latest_bars(*,feed='iex'):
+    feed=StockFeedConfig(feed).feed
     now=utc();headers={'APCA-API-KEY-ID':os.environ['APCA_API_KEY_ID'],'APCA-API-SECRET-KEY':os.environ['APCA_API_SECRET_KEY']}
-    params={'symbols':','.join(SYMBOLS),'timeframe':'1Min','start':(now-timedelta(minutes=25)).isoformat(),'end':now.replace(second=0,microsecond=0).isoformat(),'feed':'iex','adjustment':'raw','limit':1000,'sort':'asc'}
+    params={'symbols':','.join(SYMBOLS),'timeframe':'1Min','start':(now-timedelta(minutes=25)).isoformat(),'end':now.replace(second=0,microsecond=0).isoformat(),'feed':feed,'adjustment':'raw','limit':1000,'sort':'asc'}
     req=Request('https://data.alpaca.markets/v2/stocks/bars?'+urlencode(params),headers=headers)
     with build_opener(NoRedirect).open(req,timeout=10) as r:data=json.load(r)
     if data.get('next_page_token'):raise RuntimeError('Incomplete breakout bar batch')
@@ -121,12 +126,13 @@ class Control:
         if self.engine:self.engine.stop()
 
 
-def run(out, *, config=None):
+def run(out, *, config=None,feed='iex'):
+    feed_config=StockFeedConfig(feed)
     config=config or PaperSizingConfig()
     out=Path(out);out.mkdir(parents=True,exist_ok=False)
     (out/'executor.py').write_text(Path(__file__).read_text())
     control=Control();previous={s:signal.signal(s,control.halt) for s in (signal.SIGINT,signal.SIGTERM)}
-    state={'status':'preflight','paper_only':True,'started_at':utc().isoformat(),'target_notional':str(config.target_notional),'max_position_notional':str(config.max_position_notional),'max_position_equity_fraction':str(config.max_position_equity_fraction),'session_start_equity':'100000','session_loss_cutoff':str(config.max_session_loss) if config.max_session_loss is not None else None,'max_concurrent_positions':1,'symbols':SYMBOLS,'feed':'iex','selection':'Unvalidated breakout hypothesis: completed minute close above prior 15-minute high and relative volume >=1.2', 'entry_time_in_force':'day','protective_stop_pct':1,'monitored_target_pct':2,'max_hold_seconds':900,'journal_capacity':1024,'signal_checks':0,'cycles':0,'completed_round_trips':0,'orders_with_fills':0,'realized_pnl_before_fees':'0','quote_skips':0,'active_journal':None,'active_plan':None,'recovered_cycle':False}
+    state={'status':'preflight','paper_only':True,'started_at':utc().isoformat(),'target_notional':str(config.target_notional),'max_position_notional':str(config.max_position_notional),'max_position_equity_fraction':str(config.max_position_equity_fraction),'session_start_equity':'100000','session_loss_cutoff':str(config.max_session_loss) if config.max_session_loss is not None else None,'max_concurrent_positions':1,'symbols':SYMBOLS,**feed_config.to_record(),'selection':'Unvalidated breakout hypothesis: completed minute close above prior 15-minute high and relative volume >=1.2', 'entry_time_in_force':'day','protective_stop_pct':1,'monitored_target_pct':2,'max_hold_seconds':900,'journal_capacity':1024,'signal_checks':0,'cycles':0,'completed_round_trips':0,'orders_with_fills':0,'realized_pnl_before_fees':'0','quote_skips':0,'active_journal':None,'active_plan':None,'recovered_cycle':False}
     save(out/'status.json',state)
     tag=hashlib.sha256(os.environ['APCA_API_KEY_ID'].encode()).hexdigest()[:24]
     lock=Path(tempfile.gettempdir())/('trader-engine-paper-'+tag+'.lock')
@@ -154,7 +160,7 @@ def run(out, *, config=None):
                     if account.get('trading_blocked') or account.get('account_blocked'):raise RuntimeError('Account became blocked')
                     if config.max_session_loss is not None and Decimal('100000')-Decimal(account['equity'])>=config.max_session_loss:state['stop_reason']='session_loss_cutoff';break
                     if time.monotonic()-bars_at>=20:
-                        bar_cache=latest_bars();bars_at=time.monotonic()
+                        bar_cache=latest_bars(feed=feed);bars_at=time.monotonic()
                     candidates=[]
                     for ticker in SYMBOLS:
                         signal_row=candidate(bar_cache.get(ticker,[]),utc())
@@ -164,15 +170,15 @@ def run(out, *, config=None):
                     if not candidates:
                         state['waiting_for']='confirmed_breakout';save(out/'status.json',state);time.sleep(5);continue
                     symbol,signal_row=max(candidates,key=lambda item:Decimal(item[1]['relative_volume']))
-                    cache,received_at=fetch_entry_quotes(latest_quotes,(symbol,),
+                    cache,received_at=fetch_entry_quotes(lambda:latest_quotes(feed=feed),(symbol,),feed=feed,
                         evidence=lambda r:record_quote_decision(out/'quote_decisions.jsonl',r))
                     cached_at=time.monotonic();time.sleep(.2)
-                    prices=qualified_quote(cache.get(symbol),utc(),symbol=symbol,received_at=received_at,
+                    prices=qualified_quote(cache.get(symbol),utc(),symbol=symbol,received_at=received_at,feed=feed,
                         evidence=lambda r:record_quote_decision(out/'quote_decisions.jsonl',r))
                     if prices is None:
                         state['quote_skips']+=1;save(out/'status.json',state);continue
                     limit,_=prices
-                    if qualified_quote(cache.get(symbol),utc(),symbol=symbol,received_at=received_at,signal_row=signal_row,phase='entry_signal',
+                    if qualified_quote(cache.get(symbol),utc(),symbol=symbol,received_at=received_at,feed=feed,signal_row=signal_row,phase='entry_signal',
                         evidence=lambda r:record_quote_decision(out/'quote_decisions.jsonl',r)) is None:
                         state['quote_skips']+=1;save(out/'status.json',state);time.sleep(2);continue
                     stop=(limit*Decimal('.99')).quantize(Decimal('.01'),rounding=ROUND_FLOOR)
@@ -188,14 +194,14 @@ def run(out, *, config=None):
                         def note_hold(info):
                             state['hold']=info;state['last_checked_at']=utc().isoformat();save(out/'status.json',state)
                         def hold(plan,entry,owner):
-                            hold_breakout(plan,entry,owner,get_quote=lambda symbol:latest_quotes().get(symbol),
+                            hold_breakout(plan,entry,owner,get_quote=lambda symbol:latest_quotes(feed=feed).get(symbol),quote_feed=feed,
                                 close_at=close-timedelta(minutes=2),should_stop=lambda:control.stop or (out/'STOP').exists(),notify=note_hold)
                         engine=PaperExecutor(broker,journal,polls=12,hold_callback=hold);control.engine=engine
                         journal.append({'kind':'sizing_quote','symbol':symbol,'sizing':{k:str(v) for k,v in asdict(size).items()},'quote':cache[symbol],'decision_at':utc().isoformat(),'breakout_signal':signal_row})
                         def guard():
                             return (not control.stop and not engine.entries_blocked and not engine.stop_requested
                                     and not (out/'STOP').exists() and utc()<cutoff and time.monotonic()<mono_cutoff
-                                    and qualified_quote(cache.get(symbol),utc(),symbol=symbol,received_at=received_at,phase='entry_submission',
+                                    and qualified_quote(cache.get(symbol),utc(),symbol=symbol,received_at=received_at,feed=feed,phase='entry_submission',
                                         evidence=lambda r:record_quote_decision(out/'quote_decisions.jsonl',r)) is not None
                                     and shutil.disk_usage(out).free>=256*1024*1024)
                         broker.entry_guard=guard
@@ -260,11 +266,12 @@ def main():
     p.add_argument('--max-position-notional',default='15000')
     p.add_argument('--position-equity-fraction',default='0.20')
     p.add_argument('--no-session-loss-limit',action='store_true',help='Explicit paper experiment setting; other sizing/execution limits still apply')
+    p.add_argument('--feed',choices=('iex','sip'),default='iex',help='Explicit stock data feed; SIP requires entitlement; no fallback')
     args=p.parse_args()
     config=PaperSizingConfig(target_notional=args.target_notional,max_position_notional=args.max_position_notional,max_position_equity_fraction=args.position_equity_fraction,max_session_loss=None if args.no_session_loss_limit else '1000')
     if not args.execute_paper:
-        emit({'mode':'preview_no_orders','symbols':SYMBOLS,'target_notional':str(config.target_notional),'max_position_notional':str(config.max_position_notional),'max_position_equity_fraction':str(config.max_position_equity_fraction),'entry_cutoff':'verified regular-session close minus 5 minutes (flatten 2 minutes before close)','session_loss_cutoff':str(config.max_session_loss) if config.max_session_loss is not None else None,'max_positions':1});return
+        emit({'mode':'preview_no_orders',**StockFeedConfig(args.feed).to_record(),'symbols':SYMBOLS,'target_notional':str(config.target_notional),'max_position_notional':str(config.max_position_notional),'max_position_equity_fraction':str(config.max_position_equity_fraction),'entry_cutoff':'verified regular-session close minus 5 minutes (flatten 2 minutes before close)','session_loss_cutoff':str(config.max_session_loss) if config.max_session_loss is not None else None,'max_positions':1});return
     if args.output is None:raise ValueError('New output directory required')
-    result=run(args.output,config=config)
+    result=run(args.output,config=config,feed=args.feed)
     if result['status']=='needs_attention':raise SystemExit(2)
 if __name__=='__main__':main()

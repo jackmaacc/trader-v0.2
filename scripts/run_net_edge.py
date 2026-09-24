@@ -23,13 +23,14 @@ def main(argv=None):
     shadow=sub.add_parser('shadow',help='Capture diagnostic decisions from local snapshot; no registration or orders')
     shadow.add_argument('--input',required=True);shadow.add_argument('--registry',required=True)
     shadow.add_argument('--candidate',choices=['MR30','MR60','MOM20','MOM60'],required=True);shadow.add_argument('--output',required=True)
+    shadow.add_argument('--expected-feed',choices=['iex','sip'],default='sip',help='Quote feed required for diagnostics; IEX explicitly marks restricted coverage')
     args=parser.parse_args(argv)
     try:
         if args.command=='freeze':
             target=Path(args.output) if Path(args.output).suffix=='.json' else Path(args.output)/'registry.json'
             result=freeze_registry(target,monthly_overhead=args.monthly_overhead,frozen_at=args.frozen_at)
         elif args.command=='research':result=run_research(args.data,args.registry,args.output,diagnostic_last=args.diagnostic_last)
-        elif args.command=='shadow':result=run_shadow_snapshot(args.input,args.registry,args.candidate,args.output)
+        elif args.command=='shadow':result=run_shadow_snapshot(args.input,args.registry,args.candidate,args.output,expected_feed=args.expected_feed)
         else:
             target=Path(args.output)
             if target.suffix!='.json':target=target/('team_report.json' if args.command=='analysis' else 'review.json')
