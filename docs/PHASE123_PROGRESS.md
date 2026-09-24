@@ -28,7 +28,7 @@ The market-data recorder now refuses a second finalization and requests after fi
 
 Three designs and a content/source-bound design registry are implemented. See [PHASE3_RESEARCH_PROTOCOL.md](PHASE3_RESEARCH_PROTOCOL.md). They cover equities, options and crypto, retain failed candidates, and specify execution/cost/benchmark/sample rules before new outcomes. Design receipts never grant order authority or claim prospective registration.
 
-**Remaining acceptance:** executable adapters and parity tests, exact exchange calendar and source availability, calibrated costs/known overhead, independent design/code/data review, then sufficient genuinely untouched prospective observations and organic exits. New simulations, trade throughput and preexisting consumed results cannot substitute for that record. The future evidence gate cannot be completed today.
+**Remaining acceptance:** shared portfolio orchestration and reference parity, exact exchange calendar and source availability, calibrated costs/known overhead, independent design/code/data review, then sufficient genuinely untouched prospective observations and organic exits. New simulations, trade throughput and preexisting consumed results cannot substitute for that record. The future evidence gate cannot be completed today.
 
 ## Work order
 
@@ -45,3 +45,15 @@ The project goal remains active. No phase is marked complete solely because tool
 Combined focused regression: **165 passed**, covering host/preflight, evidence finalization/data, observer backup, release receipts, recovery bundles, accounting ledger and research registry. Independent reviewers approved root evidence/power changes, recovery behavior and research design tooling after schema validation repairs. Root reviewed ledger arithmetic/privacy and exercised actual import/deduplication.
 
 `research-design-freeze.json` in the private evidence directory verifies canonical registry hash `b33d9064bb674f3948ac4b004a3ec88ad4553e08236ad42e5278741a6f4bedf0` and the design document/module sources. This is a design-only freeze: adapters are absent, prospective registration is false and no research outcome has been computed.
+
+## Causal adapters and attribution checkpoint
+
+The frozen daily equity/crypto and weekly options rules now have pure research adapters. They check information availability, preserve pending exits, enforce explicit latched UTC-day entry halts, and calculate conservative sizing/cost estimates without broker I/O. Later corrections cannot change an earlier signal. Planned entry quantities cannot grow from later price information. See [PHASE3_DAILY_ADAPTERS.md](PHASE3_DAILY_ADAPTERS.md) and [PHASE3_OPTIONS_ADAPTER.md](PHASE3_OPTIONS_ADAPTER.md). These adapters do not replace the running BTC/ETH worker.
+
+The private transactional [decision ledger](DECISION_LEDGER.md) retains causal input snapshots, protocol/code hashes, corrections and order-evidence associations without claiming broker verification. An offline daily-signal command integrates the actual adapter; its synthetic CLI drill verified one decision/22 input records and idempotent replay. No prospective observations were backfilled. The original design-only freeze remains unchanged and does not bind these new adapter sources.
+
+[FIFO attribution](PNL_ATTRIBUTION.md) now separates realized/unrealized P&L, fees, income and external flows, with exact cash/quantity and marked-equity identity checks. Its read-only run against the 406-fill historical ledger retained `inconclusive`, `metrics=null`, and six missing-evidence conditions in `artifacts/phase123_20260924T154714Z/sept23-pnl-attribution.json`. It does not invent boundaries or certify source completeness.
+
+Combined focused regression: **172 passed** across daily/options adapters, recording/decision ledger, FIFO attribution, accounting import and protocol registry. Independent reviewers confirmed repaired decision-before-execution timing, persistent-halt input enforcement, options causal revision selection and P&L arithmetic. A separate reviewer also exercised 200 synthetic FIFO/cash/quantity identity cases. These are software checks, not market simulations or qualifying returns.
+
+Remaining implementation includes persistent portfolio orchestration (day identity, halt reset, ownership/reservations and exit-before-entry ordering), delay scenarios retaining original plans, shared-engine reference parity, passive/exposure/delta benchmark ledgers, verified calendar/corporate-action/fee evidence and prospective collection/registration. All three asset tracks remain research work. Actual PC recovery/cutover and the untouched future sample remain required.
