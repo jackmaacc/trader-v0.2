@@ -157,7 +157,7 @@ def _render_overview(base: dict[str, object], research: dict[str, object]) -> No
                     equity_curve.index,
                     equity_curve["equity"],
                     name="Equity",
-                    color="#083d77",
+                    color="#3982c6",
                     height=380,
                 ),
                 use_container_width=True,
@@ -277,8 +277,8 @@ def _render_symbol_detail(base: dict[str, object], artifacts_dir: Path) -> None:
         figure.update_layout(
             margin={"l": 10, "r": 10, "t": 10, "b": 10},
             height=420,
-            plot_bgcolor="white",
-            paper_bgcolor="white",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
         )
         st.plotly_chart(figure, use_container_width=True)
 
@@ -338,7 +338,7 @@ def _render_state_diagnostics(base: dict[str, object]) -> None:
                     frequency_view,
                     x="state",
                     y="observations",
-                    color="#083d77",
+                    color="#3982c6",
                     y_title="Observations",
                     height=340,
                 ),
@@ -425,8 +425,8 @@ def _render_walk_forward(research: dict[str, object]) -> None:
             barmode="group",
             height=360,
             margin={"l": 10, "r": 10, "t": 10, "b": 10},
-            plot_bgcolor="white",
-            paper_bgcolor="white",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
             xaxis_title="Fold",
             yaxis_title="Total Return",
         )
@@ -556,7 +556,7 @@ def _render_edge_quality(base: dict[str, object], research: dict[str, object]) -
                 state_view,
                 x="state",
                 y="quality_score",
-                color="#083d77",
+                color="#3982c6",
                 y_title="Quality Score",
                 height=320,
             ),
@@ -664,8 +664,8 @@ def _render_gate_ablation(research: dict[str, object]) -> None:
         figure.update_layout(
             height=320,
             margin={"l": 10, "r": 10, "t": 10, "b": 10},
-            plot_bgcolor="white",
-            paper_bgcolor="white",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
             yaxis_title=fold_metric_choice,
         )
         st.plotly_chart(figure, use_container_width=True)
@@ -726,8 +726,8 @@ def _render_selection_policy_comparison(research: dict[str, object]) -> None:
         figure.update_layout(
             height=320,
             margin={"l": 10, "r": 10, "t": 10, "b": 10},
-            plot_bgcolor="white",
-            paper_bgcolor="white",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
             yaxis_title=fold_metric_choice,
         )
         st.plotly_chart(figure, use_container_width=True)
@@ -821,8 +821,8 @@ def _render_exit_research(research: dict[str, object]) -> None:
         figure.update_layout(
             height=320,
             margin={"l": 10, "r": 10, "t": 10, "b": 10},
-            plot_bgcolor="white",
-            paper_bgcolor="white",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
             yaxis_title=fold_metric_choice,
         )
         st.plotly_chart(figure, use_container_width=True)
@@ -927,7 +927,7 @@ def _render_state_model_comparison(research: dict[str, object]) -> None:
                 summary.sort_values(selected_metric, ascending=False),
                 x="model_name",
                 y=selected_metric,
-                color="#083d77",
+                color="#3982c6",
                 y_title=selected_metric,
                 height=340,
             ),
@@ -955,8 +955,8 @@ def _render_state_model_comparison(research: dict[str, object]) -> None:
             figure.update_layout(
                 height=340,
                 margin={"l": 10, "r": 10, "t": 10, "b": 10},
-                plot_bgcolor="white",
-                paper_bgcolor="white",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
                 xaxis_title="Mean Unique States",
                 yaxis_title="Mean Test Trade Count",
             )
@@ -1007,8 +1007,8 @@ def _render_state_model_comparison(research: dict[str, object]) -> None:
         figure.update_layout(
             height=340,
             margin={"l": 10, "r": 10, "t": 10, "b": 10},
-            plot_bgcolor="white",
-            paper_bgcolor="white",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
             yaxis_title=fold_metric_choice,
         )
         st.plotly_chart(figure, use_container_width=True)
@@ -1371,26 +1371,15 @@ def _inject_styles() -> None:
     st.markdown(
         """
         <style>
-            :root {
-                --bg: #f4f1ea;
-                --card: #fffdfa;
-                --ink: #111827;
-                --muted: #5b6470;
-                --accent: #083d77;
-                --border: #ddd4c6;
-            }
             .stApp {
-                background: linear-gradient(180deg, #f7f4ee 0%, #f1ede4 100%);
-                color: var(--ink);
                 font-family: "Avenir Next", "Helvetica Neue", sans-serif;
             }
             .hero {
-                background: radial-gradient(circle at top left, #efe2c6 0%, #fffdfa 45%, #f6f1e9 100%);
-                border: 1px solid var(--border);
+                background: radial-gradient(circle at top left, rgba(128, 128, 128, 0.08), transparent 65%);
+                border: 1px solid rgba(128, 128, 128, 0.4);
                 padding: 28px 32px;
                 border-radius: 18px;
                 margin-bottom: 18px;
-                box-shadow: 0 12px 30px rgba(17, 24, 39, 0.06);
             }
             .hero h1 {
                 margin: 0;
@@ -1400,12 +1389,12 @@ def _inject_styles() -> None:
             }
             .hero p {
                 margin: 8px 0 0;
-                color: var(--muted);
+                color: inherit;
                 max-width: 960px;
                 font-size: 1rem;
             }
             .eyebrow {
-                color: var(--accent);
+                color: inherit;
                 font-size: 0.8rem;
                 letter-spacing: 0.18em;
                 text-transform: uppercase;
@@ -1413,10 +1402,22 @@ def _inject_styles() -> None:
                 font-weight: 700;
             }
             [data-testid="stMetric"] {
-                background: var(--card);
-                border: 1px solid var(--border);
+                background: transparent;
+                border: 1px solid rgba(128, 128, 128, 0.4);
                 border-radius: 14px;
                 padding: 10px 14px;
+            }
+            [data-testid="stCaptionContainer"] {
+                font-size: 0.95rem;
+                opacity: 1;
+            }
+            [data-testid="stMarkdownContainer"] p,
+            [data-testid="stMarkdownContainer"] li {
+                line-height: 1.6;
+            }
+            [data-baseweb="tab"] p {
+                font-size: 1rem;
+                font-weight: 600;
             }
         </style>
         """,
@@ -1439,8 +1440,8 @@ def _line_chart(x, y, name: str, color: str, height: int) -> go.Figure:
     figure.update_layout(
         margin={"l": 10, "r": 10, "t": 10, "b": 10},
         height=height,
-        plot_bgcolor="white",
-        paper_bgcolor="white",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
     )
     return figure
 
@@ -1458,8 +1459,8 @@ def _bar_chart(frame: pd.DataFrame, x: str, y: str, color: str, y_title: str, he
     figure.update_layout(
         height=height,
         margin={"l": 10, "r": 10, "t": 10, "b": 10},
-        plot_bgcolor="white",
-        paper_bgcolor="white",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
         xaxis_title=x,
         yaxis_title=y_title,
     )
@@ -1480,8 +1481,8 @@ def _grouped_bar_chart(frame: pd.DataFrame, x: str, y: str, group: str, y_title:
         barmode="group",
         height=height,
         margin={"l": 10, "r": 10, "t": 10, "b": 10},
-        plot_bgcolor="white",
-        paper_bgcolor="white",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
         xaxis_title=x,
         yaxis_title=y_title,
     )
@@ -1502,8 +1503,8 @@ def _heatmap(frame: pd.DataFrame, height: int) -> go.Figure:
     figure.update_layout(
         height=height,
         margin={"l": 10, "r": 10, "t": 10, "b": 10},
-        plot_bgcolor="white",
-        paper_bgcolor="white",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
     )
     return figure
 
