@@ -1,0 +1,68 @@
+{
+  "provenance": "synthetic_category_reproduction",
+  "historical_rejected_payloads_available": false,
+  "warning": "These quotes are invented offline regression inputs, not the original XOM/TJX failures or the full KLAC trigger quote. XOM/TJX root causes remain undetermined.",
+  "historical_sources": [
+    "artifacts/paper_portfolio_until_close_2026-09-23_02/REPORT.md",
+    "artifacts/paper_portfolio_until_close_2026-09-23/cycles.jsonl"
+  ],
+  "cases": [
+    {
+      "id": "XOM_stale_category",
+      "symbol": "XOM",
+      "raw_payload": {
+        "t": "2026-09-23T19:41:20Z",
+        "bp": 161.1,
+        "ap": 161.12
+      },
+      "received_at": "2026-09-23T19:41:42Z",
+      "decision_at": "2026-09-23T19:41:42Z",
+      "expected_reasons": [
+        "stale_source"
+      ],
+      "provenance": "synthetic_category_reproduction"
+    },
+    {
+      "id": "TJX_future_category",
+      "symbol": "TJX",
+      "raw_payload": {
+        "t": "2026-09-23T19:48:41Z",
+        "bp": 131.42,
+        "ap": 131.44
+      },
+      "received_at": "2026-09-23T19:48:40Z",
+      "decision_at": "2026-09-23T19:48:40Z",
+      "expected_reasons": [
+        "future_event",
+        "event_after_receipt"
+      ],
+      "provenance": "synthetic_category_reproduction"
+    },
+    {
+      "id": "KLAC_stop_trigger_category",
+      "symbol": "KLAC",
+      "raw_payload": {
+        "t": "2026-09-23T19:40:39Z",
+        "bp": 182.31,
+        "ap": 182.32
+      },
+      "received_at": "2026-09-23T19:40:39Z",
+      "decision_at": "2026-09-23T19:40:39Z",
+      "expected_reasons": [],
+      "provenance": "synthetic_category_reproduction",
+      "known_historical_fields": {
+        "last_bid": "182.31",
+        "entry_price": "187.850633",
+        "stop_price": "185.97",
+        "exit_reason": "stop_level",
+        "exit_fill": "187.94"
+      },
+      "invented_fields": [
+        "t",
+        "ap",
+        "received_at",
+        "decision_at"
+      ]
+    }
+  ]
+}

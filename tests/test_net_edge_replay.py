@@ -260,7 +260,8 @@ def test_dividend_payment_after_sale_settles_once():
     assert r.metrics['net_pnl']==pytest.approx(entitled)
 
 
-def test_entry_stop_above_open_fills_at_open_and_sizes_full_loss(monkeypatch):
+@pytest.mark.parametrize("portfolio_cap", [.005, .001])
+def test_entry_stop_above_open_fills_at_open_and_sizes_full_loss(monkeypatch, portfolio_cap):
     from trader_engine.research.etf_candidates import ETFDecision
     import trader_engine.research.etf_candidates as candidates
     frames,schedule,_=fixture_data(1)
@@ -272,7 +273,7 @@ def test_entry_stop_above_open_fills_at_open_and_sizes_full_loss(monkeypatch):
     # Budget must cover the entire executable roundtrip, not the smaller ATR distance.
     monkeypatch.setattr(candidates,'mean_reversion_session_decisions',lambda f,spec:{
         t:ETFDecision(t==signal,'qualified',3.,.01,110.) for t in f.index})
-    spec=StrategySpec('MR30',slippage_bps=60,commission_bps=2)
+    spec=StrategySpec('MR30',slippage_bps=60,commission_bps=2,max_portfolio_risk=portfolio_cap)
     r=BacktestEngine.run_etf_replay(frames,spec,schedule=schedule)
     assert len(r.trades)==5
     exits=r.decisions.loc[r.decisions.action=='exit']
@@ -286,3 +287,9 @@ def test_entry_stop_above_open_fills_at_open_and_sizes_full_loss(monkeypatch):
         assert -trade.pnl<=risk_budget+1e-8
         # Entries are accepted before the simultaneous intrabar stop processing.
         eq-=entry.quantity*(entry.price*(1+spec.commission_rate)-100)
+
+    # Remaining liquidation risk of simultaneous entries fits the marked-equity cap.
+    quantity=entries.quantity.sum()
+    equity_after_entries=100000-quantity*(100.6*(1+spec.commission_rate)-100)
+    remaining_exit_risk=quantity*(100-100*(1-spec.one_way_impact)*(1-spec.commission_rate))
+    assert remaining_exit_risk<=portfolio_cap*equity_after_entries+1e-8

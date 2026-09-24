@@ -108,3 +108,25 @@ def test_shared_library_parallel_independent_scenarios(library):
     expected=[run_scenario(p,s,1,library).metrics for s in specs]
     with ThreadPoolExecutor(max_workers=4) as pool:actual=list(pool.map(lambda s:run_scenario(p,s,1,library).metrics,specs))
     assert actual==expected
+
+
+def test_simultaneous_marketable_stops_respect_portfolio_cap_and_parity(monkeypatch, library):
+    from trader_engine.research.etf_candidates import ETFDecision
+    data=fixture_data('MR',days=1)
+    frames,daily,schedule,actions=data
+    for f in frames.values():
+        f.loc[:,['open','close']]=100.
+        f.loc[:,'high']=100.1
+        f.loc[:,'low']=99.9
+    signal=schedule.market_open.iloc[0]+pd.Timedelta(minutes=35)
+    builder=lambda f,spec:{t:ETFDecision(t==signal,'qualified',3.,.01,110.) for t in f.index}
+    monkeypatch.setattr('trader_engine.research.etf_candidates.mean_reversion_session_decisions',builder)
+    monkeypatch.setattr('trader_engine.research.etf_sensitivity.mean_reversion_session_decisions',builder)
+    spec=StrategySpec('MR30',slippage_bps=60,commission_bps=2,max_portfolio_risk=.001)
+    _,fast,_=compare(*data,spec,0,library)
+    entries=fast.events.loc[fast.events.action=='entry']
+    assert len(entries)>=2
+    quantity=entries.quantity.sum()
+    equity=100000-quantity*(100.6*(1+spec.commission_rate)-100)
+    liquidation_risk=quantity*(100-100*(1-spec.one_way_impact)*(1-spec.commission_rate))
+    assert liquidation_risk<=spec.max_portfolio_risk*equity+1e-8

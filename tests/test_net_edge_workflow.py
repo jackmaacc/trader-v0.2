@@ -62,7 +62,8 @@ def test_calendar_overhead_daily_includes_weekends():
     assert len(costs)==4 and sum(costs.values())==pytest.approx(20+620/28)
 
 
-def test_shadow_snapshot_runs_offline_and_preserves_risk(tmp_path):
+@pytest.mark.parametrize("bad_quote", [None, "malformed", {"raw_payload": {"t": "bad"}}])
+def test_shadow_snapshot_runs_offline_and_preserves_risk(tmp_path, bad_quote):
     from trader_engine.workflows.net_edge import run_shadow_snapshot
     from trader_engine.research.strategy_spec import StrategySpec
     dataset(tmp_path)
@@ -70,12 +71,15 @@ def test_shadow_snapshot_runs_offline_and_preserves_risk(tmp_path):
     state=dict(version=1,equity='99400',highwater='100000',daily_baseline='100000',cashflow_total='0',session='2026-01-02',daily_halt=False,drawdown_halt=False)
     risk=tmp_path/'risk.json';risk.write_text(json.dumps(state));prior=risk.read_bytes()
     raw=dict(context=dict(as_of='2026-01-02T15:00:00Z',strategy_hash=StrategySpec('MR30').spec_hash,symbols=list(ETF_UNIVERSE),evidence=[]),
-        histories={s:f'minutes/{s}.parquet' for s in ETF_UNIVERSE},quotes={},risk_state='risk.json',positions=[],cash=99400,
+        histories={s:f'minutes/{s}.parquet' for s in ETF_UNIVERSE},quotes={'SPY':bad_quote},risk_state='risk.json',positions=[],cash=99400,
         session_open='2026-01-02T14:30:00Z',session_close='2026-01-02T21:00:00Z')
     snapshot=tmp_path/'snapshot.json';snapshot.write_text(json.dumps(raw))
     result=run_shadow_snapshot(snapshot,registry,'MR30',tmp_path/'shadow')
     assert result['formal_forward_run'] is False and result['broker_orders_submitted']==0
     assert len(result['decisions'])==5
+    spy=next(row for row in result['decisions'] if row['symbol']=='SPY')
+    assert 'unexpected_feed' in spy['quote']['reasons']
+    assert 'invalid_local_timestamp' in spy['quote']['reasons']
     assert not any(row['eligible'] for row in result['decisions'])
     assert risk.read_bytes()==prior
     saved=json.loads((tmp_path/'shadow/manifest.json').read_text())

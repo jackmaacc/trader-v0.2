@@ -2,6 +2,8 @@
 from datetime import datetime,timezone,timedelta
 from decimal import Decimal,ROUND_FLOOR,ROUND_CEILING
 import time
+from dataclasses import replace
+from trader_engine.data.quote_validation import QuoteEnvelope,QuotePolicy,validate_quote
 
 def candidate(bars, now):
     """Last completed minute closes above the prior fifteen-minute high.
@@ -64,7 +66,6 @@ def hold_breakout(plan,entry,engine,*,get_quote,close_at,should_stop=lambda:Fals
         if protective['status'] in ('rejected','canceled','expired'):raise RuntimeError('Protective stop disappeared while holding')
         if monotonic()>=deadline:break
         if recovery_policy is not None:
-            from trader_engine.data.quote_validation import QuoteEnvelope,QuotePolicy,validate_quote
             # Confirm exact remaining coverage before accepting a data-only retry.
             verified=(protective.get('status') in ('new','accepted','partially_filled')
                       and Decimal(str(protective.get('qty','0')))==qty
@@ -72,48 +73,75 @@ def hold_breakout(plan,entry,engine,*,get_quote,close_at,should_stop=lambda:Fals
             if not verified:
                 recovery_policy.update(plan.symbol,category='order',protection_verified=False,now=monotonic())
                 raise RuntimeError('Protective stop coverage cannot be verified')
-            retrieval_error=None
-            try:q=get_quote(plan.symbol)
-            except Exception as exc:
-                if getattr(exc,'status',getattr(exc,'code',None)) in (401,403):
-                    recovery_policy.update(plan.symbol,category='account',protection_verified=True,now=monotonic())
-                    raise RuntimeError('Account market-data authorization failed') from exc
-                q=None;retrieval_error=type(exc).__name__
-            at=now().isoformat()
-            envelope=q if isinstance(q,QuoteEnvelope) else QuoteEnvelope(plan.symbol,quote_feed,at,at,q)
-            # The current decision time must be rechecked even for cached envelopes.
-            if isinstance(q,QuoteEnvelope):
-                envelope=QuoteEnvelope(q.symbol,q.feed,q.received_at,at,q.raw_payload)
-            validation=validate_quote(envelope,quote_policy or QuotePolicy(expected_feed=quote_feed))
-            if envelope.symbol != plan.symbol:
-                retrieval_error='quote_symbol_mismatch'
-            if not validation.valid or retrieval_error:
-                diagnostic=validation.to_record()
-                if retrieval_error:diagnostic['retrieval_error']=retrieval_error
-                info.setdefault('first_quote_failure',diagnostic)
-                info['last_quote_failure']=diagnostic
-                engine._event({'kind':'holding_quote_rejected',**diagnostic})
-                action=recovery_policy.update(plan.symbol,category='data',protection_verified=True,now=monotonic())
-                if action.retry_quote:
-                    sleep(min(1,max(0,action.deadline-monotonic())))
-                    continue
-                reason='quote_recovery_expired';break
+        retrieval_error=None;authorization_failure=False
+        try:q=get_quote(plan.symbol)
+        except Exception as exc:
+            q=None;retrieval_error=type(exc).__name__
+            authorization_failure=getattr(exc,'status',getattr(exc,'code',None)) in (401,403)
+        received_at=now().isoformat()
+        envelope=q if isinstance(q,QuoteEnvelope) else QuoteEnvelope(plan.symbol,quote_feed,received_at,received_at,q)
+        envelope=replace(envelope,decision_at=now().isoformat())
+        # Keep the existing legacy holding gate: 10 seconds, 250 ms clock
+        # allowance, positive uncrossed prices; no new spread/size requirement.
+        policy=quote_policy or (QuotePolicy(expected_feed=quote_feed) if recovery_policy is not None else
+            QuotePolicy(expected_feed=quote_feed,max_source_age_seconds=10,max_cache_age_seconds=10,
+                        max_spread_bps=None,require_sizes=False))
+        policy=replace(policy,max_source_age_seconds=min(10,policy.max_source_age_seconds),
+                       max_future_skew_seconds=min(.25,policy.max_future_skew_seconds))
+        validation=validate_quote(envelope,policy,expected_symbol=plan.symbol)
+        envelope=validation.envelope
+        if retrieval_error:
+            validation=replace(validation,valid=False,reasons=validation.reasons+('quote_retrieval_failed',))
+        diagnostic=validation.to_record()
+        diagnostic.update(symbol=plan.symbol,phase='holding')
+        if retrieval_error:diagnostic['retrieval_error']=retrieval_error
+        if authorization_failure:diagnostic['authorization_failure']=True
+        if not validation.valid:
+            info.setdefault('first_quote_failure',diagnostic)
+            info['last_quote_failure']=diagnostic
+            engine._event({'kind':'holding_quote_rejected',**diagnostic})
+            if engine.storage_failed:raise RuntimeError('Quote evidence could not be persisted')
+            if recovery_policy is None:raise RuntimeError('Holding quote invalid/stale: '+','.join(validation.reasons))
+            if authorization_failure:
+                recovery_policy.update(plan.symbol,category='account',protection_verified=True,now=monotonic())
+                raise RuntimeError('Account market-data authorization failed')
+            action=recovery_policy.update(plan.symbol,category='data',protection_verified=True,now=monotonic())
+            if action.retry_quote:
+                sleep(min(1,max(0,action.deadline-monotonic())))
+                continue
+            reason='quote_recovery_expired';break
+        if recovery_policy is not None:
             action=recovery_policy.update(plan.symbol,category='healthy',protection_verified=True,now=monotonic())
             if action.escalate:
+                diagnostic['decision']='recovery_expired'
+                engine._event({'kind':'holding_quote_accepted',**diagnostic})
+                if engine.storage_failed:raise RuntimeError('Quote evidence could not be persisted')
                 reason='quote_recovery_expired';break
-            q=envelope.raw_payload
-        else:
-            q=get_quote(plan.symbol)
-        try:
-            stamp=datetime.fromisoformat(q['t'].replace('Z','+00:00'))
-            bid,ask=Decimal(str(q['bp'])),Decimal(str(q['ap']))
-            age=(now()-stamp).total_seconds()
-            if not (bid.is_finite() and ask.is_finite() and 0<bid<=ask and -.25<=age<=10):raise ValueError('Unusable quote')
-            # A tiny future event is not traded on; wait until local time catches up.
-            if age<0:
-                sleep(min(.3,-age+.01))
-                if (now()-stamp).total_seconds()<0:continue
-        except (ValueError,KeyError,TypeError,ArithmeticError):raise RuntimeError('Holding quote invalid/stale') from None
+        q=envelope.raw_payload
+        bid,ask=Decimal(str(q['bp'])),Decimal(str(q['ap']))
+        # A tiny future event is recorded as waiting and never used to exit.
+        if validation.source_age_seconds<0:
+            diagnostic['decision']='wait_for_event'
+            engine._event({'kind':'holding_quote_accepted',**diagnostic})
+            if engine.storage_failed:raise RuntimeError('Quote evidence could not be persisted')
+            sleep(min(.3,-validation.source_age_seconds+.01))
+            # Revalidate the same captured payload at the actual next decision.
+            validation=validate_quote(replace(envelope,decision_at=now().isoformat()),policy,expected_symbol=plan.symbol)
+            diagnostic=validation.to_record();diagnostic.update(symbol=plan.symbol,phase='holding')
+            if not validation.valid:
+                info.setdefault('first_quote_failure',diagnostic);info['last_quote_failure']=diagnostic
+                engine._event({'kind':'holding_quote_rejected',**diagnostic})
+                if engine.storage_failed:raise RuntimeError('Quote evidence could not be persisted')
+                raise RuntimeError('Holding quote invalid/stale: '+','.join(validation.reasons))
+            if validation.source_age_seconds<0:
+                diagnostic['decision']='wait_for_event'
+                engine._event({'kind':'holding_quote_accepted',**diagnostic})
+                if engine.storage_failed:raise RuntimeError('Quote evidence could not be persisted')
+                continue
+        diagnostic.update(decision='profit_target' if bid>=target else ('stop_level' if bid<=stop else 'hold'),
+                          stop_price=str(stop),target_price=str(target))
+        engine._event({'kind':'holding_quote_accepted',**diagnostic})
+        if engine.storage_failed:raise RuntimeError('Quote evidence could not be persisted')
         info['last_bid']=str(bid)
         if bid>=target:reason='profit_target';break
         if bid<=stop:reason='stop_level';break

@@ -14,6 +14,7 @@ from trader_engine.execution.journal import ReservedJournal,ExecutionLock
 from trader_engine.execution.lifecycle import PaperExecutor,TradePlan
 from trader_engine.execution.sizing import PaperSizingConfig,size_long_entry
 from trader_engine.execution.breakout import candidate,hold_breakout
+from trader_engine.data.quote_validation import QuoteEnvelope,QuotePolicy,validate_quote
 SYMBOLS=['SPY','QQQ','NVDA','AMD','GOOGL','AMZN','META','MSFT','AAPL','TSLA']
 
 def utc():return datetime.now(timezone.utc)
@@ -24,17 +25,68 @@ def entry_window_open(clock,close,now):
     broker_close=datetime.fromisoformat(clock['next_close'])
     return bool(clock.get('is_open')) and broker_close==close and stamp<close-timedelta(minutes=5) and now<close-timedelta(minutes=5)
 
-def qualified_quote(q,now):
+def record_quote_decision(path,record):
+    """Append before acting; serialization/storage failure prohibits the decision."""
+    encoded=json.dumps(record,sort_keys=True,allow_nan=False)+'\n'
+    with Path(path).open('a') as f:
+        f.write(encoded);f.flush();os.fsync(f.fileno())
+
+
+def fetch_entry_quotes(fetch,symbols,*,evidence,now=utc):
+    """Save unavailable entry quote diagnostics without upstream exception text."""
+    try:
+        quotes=fetch()
+    except Exception as exc:
+        at=now().isoformat()
+        for symbol in symbols:
+            record=validate_quote(QuoteEnvelope(symbol,'iex',at,at,None),
+                QuotePolicy(expected_feed='iex')).to_record()
+            record.update(kind='entry_quote_decision',symbol=symbol,phase='entry_retrieval',
+                          valid=False,decision='rejected',retrieval_error=type(exc).__name__,
+                          reasons=[*record['reasons'],'quote_retrieval_failed'])
+            status=getattr(exc,'status',getattr(exc,'code',None))
+            if isinstance(status,int):record['retrieval_status']=status
+            evidence(record)
+        raise
+    return quotes,now().isoformat()
+
+
+def qualified_quote(q,now,*,symbol='',received_at=None,evidence=None,phase='entry',signal_row=None):
+    # These are the existing entry limits, with no size requirement added.
+    policy=QuotePolicy(expected_feed='iex',max_source_age_seconds=5,max_cache_age_seconds=5,
+                       max_future_skew_seconds=0,max_spread_bps=10,require_sizes=False,min_ask=1)
+    envelope=QuoteEnvelope(symbol,'iex',str(received_at or now.isoformat()),now.isoformat(),q)
+    validation=validate_quote(envelope,policy,expected_symbol=symbol)
+    q=validation.envelope.raw_payload
+    record=validation.to_record()
+    # Receipt diagnostics are evidence; the existing entry policy gates source
+    # age only and permits a previously future quote once local time catches up.
+    reasons=[r for r in validation.reasons if r not in ('stale_cache','receipt_after_decision','event_after_receipt')]
+    record['validation_reasons']=list(validation.reasons);prices=None
     try:
         bid,ask=Decimal(str(q['bp'])),Decimal(str(q['ap']))
         age=(now-datetime.fromisoformat(q['t'].replace('Z','+00:00'))).total_seconds()
-        if not all(v.is_finite() for v in (bid,ask)):return None
-        if not (0<bid<=ask and ask>=1 and 0<=age<=5 and (ask-bid)/((ask+bid)/2)*10000<=10):return None
-        limit=(ask*Decimal('1.0002')).quantize(Decimal('.01'),rounding=ROUND_CEILING)
-        stop=(limit*Decimal('.995')).quantize(Decimal('.01'),rounding=ROUND_FLOOR)
-        if stop<=0 or stop>=limit:return None
-        return limit,stop
-    except (ValueError,KeyError,TypeError,ArithmeticError):return None
+        # Retain Decimal arithmetic and the exact legacy eligibility test.
+        usable=(all(v.is_finite() for v in (bid,ask)) and
+                0<bid<=ask and ask>=1 and 0<=age<=5 and (ask-bid)/((ask+bid)/2)*10000<=10)
+        if usable:
+            limit=(ask*Decimal('1.0002')).quantize(Decimal('.01'),rounding=ROUND_CEILING)
+            stop=(limit*Decimal('.995')).quantize(Decimal('.01'),rounding=ROUND_FLOOR)
+            if stop<=0 or stop>=limit:reasons.append('invalid_entry_stop')
+            elif signal_row is not None:
+                if bid<=Decimal(signal_row['breakout_level']):reasons.append('bid_not_above_breakout')
+                if limit>Decimal(signal_row['signal_close'])*Decimal('1.003'):reasons.append('entry_above_signal_band')
+                if not reasons:prices=(limit,stop)
+            elif not reasons:prices=(limit,stop)
+        elif not reasons:reasons.append('legacy_entry_gate_failed')
+    except (ValueError,KeyError,TypeError,ArithmeticError,AttributeError):
+        if not reasons:reasons.append('invalid_entry_quote')
+    record.update(kind='entry_quote_decision',symbol=symbol,phase=phase,valid=prices is not None,
+                  reasons=reasons,decision='accepted' if prices is not None else 'rejected')
+    if signal_row is not None:record['breakout_signal']=signal_row
+    if prices is not None:record.update(limit_price=str(prices[0]),stop_price=str(prices[1]))
+    if evidence is not None:evidence(record)
+    return prices
 
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self,*args,**kwargs):return None
@@ -112,12 +164,16 @@ def run(out, *, config=None):
                     if not candidates:
                         state['waiting_for']='confirmed_breakout';save(out/'status.json',state);time.sleep(5);continue
                     symbol,signal_row=max(candidates,key=lambda item:Decimal(item[1]['relative_volume']))
-                    cache=latest_quotes();cached_at=time.monotonic();time.sleep(.2)
-                    prices=qualified_quote(cache.get(symbol,{}),utc())
+                    cache,received_at=fetch_entry_quotes(latest_quotes,(symbol,),
+                        evidence=lambda r:record_quote_decision(out/'quote_decisions.jsonl',r))
+                    cached_at=time.monotonic();time.sleep(.2)
+                    prices=qualified_quote(cache.get(symbol),utc(),symbol=symbol,received_at=received_at,
+                        evidence=lambda r:record_quote_decision(out/'quote_decisions.jsonl',r))
                     if prices is None:
                         state['quote_skips']+=1;save(out/'status.json',state);continue
                     limit,_=prices
-                    if Decimal(str(cache[symbol]['bp']))<=Decimal(signal_row['breakout_level']) or limit>Decimal(signal_row['signal_close'])*Decimal('1.003'):
+                    if qualified_quote(cache.get(symbol),utc(),symbol=symbol,received_at=received_at,signal_row=signal_row,phase='entry_signal',
+                        evidence=lambda r:record_quote_decision(out/'quote_decisions.jsonl',r)) is None:
                         state['quote_skips']+=1;save(out/'status.json',state);time.sleep(2);continue
                     stop=(limit*Decimal('.99')).quantize(Decimal('.01'),rounding=ROUND_FLOOR)
                     size=size_long_entry(config,equity=account['equity'],cash=account['cash'],session_start_equity='100000',entry_price=limit,stop_price=stop)
@@ -132,14 +188,15 @@ def run(out, *, config=None):
                         def note_hold(info):
                             state['hold']=info;state['last_checked_at']=utc().isoformat();save(out/'status.json',state)
                         def hold(plan,entry,owner):
-                            hold_breakout(plan,entry,owner,get_quote=lambda symbol:latest_quotes()[symbol],
+                            hold_breakout(plan,entry,owner,get_quote=lambda symbol:latest_quotes().get(symbol),
                                 close_at=close-timedelta(minutes=2),should_stop=lambda:control.stop or (out/'STOP').exists(),notify=note_hold)
                         engine=PaperExecutor(broker,journal,polls=12,hold_callback=hold);control.engine=engine
                         journal.append({'kind':'sizing_quote','symbol':symbol,'sizing':{k:str(v) for k,v in asdict(size).items()},'quote':cache[symbol],'decision_at':utc().isoformat(),'breakout_signal':signal_row})
                         def guard():
                             return (not control.stop and not engine.entries_blocked and not engine.stop_requested
                                     and not (out/'STOP').exists() and utc()<cutoff and time.monotonic()<mono_cutoff
-                                    and qualified_quote(cache.get(symbol,{}),utc()) is not None
+                                    and qualified_quote(cache.get(symbol),utc(),symbol=symbol,received_at=received_at,phase='entry_submission',
+                                        evidence=lambda r:record_quote_decision(out/'quote_decisions.jsonl',r)) is not None
                                     and shutil.disk_usage(out).free>=256*1024*1024)
                         broker.entry_guard=guard
                         result=engine.execute(plan)

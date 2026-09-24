@@ -18,6 +18,6 @@ Research execution now clamps an already-marketable initial stop to the observed
 
 Five provider-confirmed missing TLT minutes remain gaps. Corporate-action publication times and precise dividend cash credit times remain unverified. Recurring overhead is unknown, so net trading profit does not establish business profit.
 
-The accelerated and reference research engines agree on corrected stop sizing. Shadow execution and AccountRisk still require matching treatment of already-marketable initial stops: an explicit execution-readiness blocker. These simulations do not establish full replay/shadow parity.
+The accelerated and reference research engines clamp both initial and aggregate marketable-stop risk to executable prices. Diagnostic shadow and AccountRisk now apply the same conservative principle; quote-based shadow uses the executable bid and carries the resulting exit cost into later proposals. Offline regression coverage includes simultaneous entries under a tightened portfolio cap. Existing saved campaigns predate the aggregate-risk correction; do not silently relabel them as runs of the current code. These targeted checks do not establish full replay/shadow parity or broker readiness.
 
 All trials share one historical path. The profitable fraction describes the cost grid, not the probability of future profit. These are development results, with no champion selection, prospective confirmation, purchase or broker orders.

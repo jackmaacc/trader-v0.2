@@ -54,3 +54,40 @@ def test_future_history_or_unregistered_strategy_rejected(tmp_path):
     kw=inputs(tmp_path);kw['history_available_at']['SPY']=pd.Timestamp('2026-09-25 20:00Z')
     result=run_shadow(**kw)
     assert next(d for d in result['decisions'] if d['symbol']=='SPY')['reason']=='daily_availability_invalid'
+
+
+def test_marketable_stop_sizes_bid_liquidation_and_carries_risk(tmp_path, monkeypatch):
+    from trader_engine.research.etf_candidates import ETFDecision
+    kw=inputs(tmp_path)
+    spec=StrategySpec('MOM20',slippage_bps=60,commission_bps=2,max_portfolio_risk=.001)
+    kw['spec']=spec
+    kw['context']=SharedContext(kw['context'].as_of,spec.spec_hash,ETF_UNIVERSE,())
+    monkeypatch.setattr('trader_engine.execution.shadow.momentum_decision',
+                        lambda f,s:ETFDecision(True,'qualified',3.,.01,None))
+    rows=run_shadow(**kw)['decisions']
+    approved=[r for r in rows if r['eligible']]
+    assert len(approved)>=2
+    liquidation=110*(1-spec.one_way_impact)*(1-spec.commission_rate)
+    assert all(r['quantity']*(r['proposed_entry']*(1+spec.commission_rate)-liquidation)<=100+1e-8 for r in approved)
+    total=sum(r['quantity']*(r['proposed_entry']-liquidation) for r in approved)
+    assert total<=100+1e-8
+
+
+@pytest.mark.parametrize('kind', ['missing','symbol_mismatch','nonfinite'])
+def test_every_shadow_quote_decision_retains_exact_diagnostic(tmp_path,kind):
+    kw=inputs(tmp_path)
+    if kind=='missing':kw['quotes'].pop('SPY')
+    else:
+        old=kw['quotes']['SPY'].envelope
+        raw=dict(old.raw_payload)
+        if kind=='nonfinite':raw['bp']=float('nan')
+        kw['quotes']['SPY']=validate_quote(QuoteEnvelope(
+            'QQQ' if kind=='symbol_mismatch' else 'SPY',old.feed,old.received_at,old.decision_at,raw))
+    run_shadow(**kw)
+    rows=json.loads((kw['output_dir']/'decisions.json').read_text(),
+                    parse_constant=lambda value:pytest.fail('Non-standard JSON '+value))
+    row=next(r for r in rows if r['symbol']=='SPY')
+    assert not row['eligible']
+    expected={'missing':'missing_quote','symbol_mismatch':'quote_symbol_mismatch','nonfinite':'invalid_price'}[kind]
+    assert expected in row['quote']['reasons']
+    assert all('quote' in r for r in rows)

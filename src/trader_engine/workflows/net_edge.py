@@ -284,8 +284,12 @@ def run_shadow_snapshot(snapshot,registry_path,candidate_id,output):
     quotes={}
     for symbol,q in raw.get('quotes',{}).items():
         if symbol not in ETF_UNIVERSE:raise ValueError('Unknown quote symbol')
-        envelope=QuoteEnvelope(symbol,q['feed'],q['received_at'],context.as_of.isoformat(),q['raw_payload'])
-        quotes[symbol]=validate_quote(envelope)
+        # Preserve malformed/missing quote diagnostics instead of aborting before
+        # the shadow decision tape can explain why the symbol was rejected.
+        wrapper=q if isinstance(q,dict) else {}
+        envelope=QuoteEnvelope(symbol,wrapper.get('feed','unknown'),wrapper.get('received_at'),
+                               context.as_of.isoformat(),wrapper.get('raw_payload',q))
+        quotes[symbol]=validate_quote(envelope,expected_symbol=symbol)
     risk_source=local(raw['risk_state'])
     positions=raw.get('positions',[])
     if not isinstance(positions,list):raise ValueError('Positions must be a list')

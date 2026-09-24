@@ -114,11 +114,14 @@ class AccountRisk:
         return self.decision()
 
     def approve_entry(self, symbol, quantity, price, stop_price, positions, overnight=False,
-                      *, one_way_impact_bps=7, commission_bps=0, cash=None):
+                      *, one_way_impact_bps=7, commission_bps=0, cash=None, reference_price=None):
         """Price is impact-adjusted entry price; bps are 1/10,000 per side.
 
         Stop risk includes entry commission and adverse exit impact/commission,
-        matching replay. Existing rows can provide exit_cost_per_share in dollars.
+        matching replay. An immediately marketable stop uses the lower of its
+        trigger and reference_price (executable bid for quote-based callers).
+        Without an explicit reference, invert the modeled entry impact.
+        Existing rows can provide exit_cost_per_share in dollars.
         Cash, when supplied, is reconciled unreserved cash, not buying power.
         """
         d=self.decision()
@@ -132,7 +135,11 @@ class AccountRisk:
             if cash is not None and q*p*(1+commission)>amount(cash):raise ValueError('insufficient_cash')
             if q<=0 or q!=q.to_integral_value() or not 0<stop<p:
                 raise ValueError('Invalid whole-share long')
-            proposed=dict(symbol=symbol,quantity=q,price=p,stop_price=stop,overnight=overnight)
+            reference=p/(1+impact) if reference_price is None else amount(reference_price)
+            if reference<=0:raise ValueError('invalid_reference_price')
+            executable_stop=min(stop,reference)
+            proposed=dict(symbol=symbol,quantity=q,price=p,stop_price=stop,overnight=overnight,
+                          exit_cost_per_share=stop-executable_stop*(1-impact)*(1-commission))
             totals=dict(gross=Decimal(0),name=Decimal(0),risk=Decimal(0),overnight=Decimal(0),indexes=Decimal(0))
             for row in [*positions,proposed]:
                 rq,rp,rs=map(amount,(row['quantity'],row['price'],row['stop_price']))
@@ -146,7 +153,7 @@ class AccountRisk:
                 if row.get('overnight',False):totals['overnight']+=n
                 if row['symbol'] in ('SPY','QQQ','IWM'):totals['indexes']+=n
             limits={'gross':'.5','name':'.1','risk':'.005','overnight':'.25','indexes':'.2'}
-            if q*(p*(1+commission)-stop*(1-impact)*(1-commission))>e*Decimal('.001'):raise ValueError('trade_stop_risk_limit')
+            if q*(p*(1+commission)-executable_stop*(1-impact)*(1-commission))>e*Decimal('.001'):raise ValueError('trade_stop_risk_limit')
             for key,limit in limits.items():
                 if totals[key]>e*Decimal(limit):raise ValueError(key+'_limit')
         except (ValueError,TypeError,KeyError,ArithmeticError) as exc:

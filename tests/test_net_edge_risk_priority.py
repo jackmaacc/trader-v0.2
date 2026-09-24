@@ -111,3 +111,20 @@ def test_cost_aware_risk_cash_and_fixed_universe(tmp_path):
     assert not r.approve_entry('GLD',1,100,99,[],cash=99).allow_entries
     assert not r.approve_entry('AAPL',1,100,99,[]).allow_entries
     assert r.observe(99500,'2026-09-23').drain
+
+
+@pytest.mark.parametrize('reference', [None, 100, 99.9])
+def test_marketable_initial_stop_reserves_executable_loss(tmp_path, reference):
+    r=risk(tmp_path)
+    kw={} if reference is None else {'reference_price':reference}
+    # Nominal 100.585 stop hides most of a 60bps entry/exit roundtrip.
+    d=r.approve_entry('GLD',90,100.6,100.585,[],one_way_impact_bps=60,
+                      commission_bps=2,**kw)
+    assert not d.allow_entries and d.reason=='trade_stop_risk_limit'
+    assert r.approve_entry('GLD',70,100.6,100.585,[],one_way_impact_bps=60,
+                           commission_bps=2,**kw).allow_entries
+
+
+@pytest.mark.parametrize('reference', [0, -1, float('nan')])
+def test_invalid_executable_reference_fails_closed(tmp_path, reference):
+    assert not risk(tmp_path).approve_entry('GLD',1,100,99,[],reference_price=reference).allow_entries

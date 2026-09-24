@@ -1273,7 +1273,7 @@ def _run_etf_replay(frames_by_symbol, spec, initial_capital=100000., *, schedule
 
 
 def _etf_mark_to_stop_risk(quantity,mark,stop,impact,commission):
-    return quantity*max(mark-stop*(1-impact)*(1-commission),0.)
+    return quantity*max(mark-min(mark,stop)*(1-impact)*(1-commission),0.)
 
 
 # Explicit opt-in API preserves the existing event engine and its legacy callers.

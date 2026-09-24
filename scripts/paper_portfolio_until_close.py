@@ -14,7 +14,7 @@ from trader_engine.execution.journal import ReservedJournal,ExecutionLock
 from trader_engine.execution.lifecycle import PaperExecutor,TradePlan
 from trader_engine.execution.portfolio import Reservations,SymbolBroker
 from trader_engine.execution.sizing import PaperSizingConfig,size_long_entry
-from paper_breakout_until_close import qualified_quote,entry_window_open,save,utc
+from paper_breakout_until_close import qualified_quote,record_quote_decision,fetch_entry_quotes,entry_window_open,save,utc
 
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self,*args,**kwargs):return None
@@ -96,7 +96,7 @@ def run(out):
             state.update(status='running',starting_equity=account['equity'],market_close=close.isoformat(),entry_cutoff=cutoff.isoformat(),flatten_at=(close-timedelta(minutes=2)).isoformat())
             market=Market();symbols=market.assets();state['discovered_symbols']=len(symbols)
             save(out/'universe.json',symbols);save(out/'protocol.json',state);persist();emit({'event':'START',**state})
-            def worker(symbol,plan,quote,signal_row,sizing,job):
+            def worker(symbol,plan,quote,signal_row,sizing,job,received_at):
                 result=None;engine=None;failed=False
                 try:
                     with AlpacaPaperClient(allow_orders=True) as broker,ReservedJournal(job['journal'],capacity=2048) as journal:
@@ -104,10 +104,11 @@ def run(out):
                             with guard_lock:job['hold']=info
                             save(Path(job['status_file']),{k:v for k,v in job.items() if k not in ('thread','engine')})
                         def holding(plan,entry,owner):
-                            hold_breakout(plan,entry,owner,get_quote=lambda s:market.quotes([s])[s],close_at=close-timedelta(minutes=2),should_stop=stopped,notify=note)
+                            hold_breakout(plan,entry,owner,get_quote=lambda s:market.quotes([s]).get(s),close_at=close-timedelta(minutes=2),should_stop=stopped,notify=note)
                         engine=PaperExecutor(SymbolBroker(broker,symbol),journal,polls=12,hold_callback=holding)
                         with guard_lock:job['engine']=engine
-                        broker.entry_guard=lambda:not stopped() and utc()<cutoff and qualified_quote(quote,utc()) is not None and shutil.disk_usage(out).free>=256*1024*1024
+                        broker.entry_guard=lambda:not stopped() and utc()<cutoff and qualified_quote(quote,utc(),symbol=symbol,received_at=received_at,phase='entry_submission',
+                            evidence=lambda r:journal.append(r)) is not None and shutil.disk_usage(out).free>=256*1024*1024
                         journal.append({'kind':'sizing_quote','symbol':symbol,'sizing':{k:str(v) for k,v in asdict(sizing).items()},'quote':quote,'decision_at':utc().isoformat(),'breakout_signal':signal_row})
                         result=engine.execute(plan)
                         if result.status=='needs_reconciliation':
@@ -175,10 +176,15 @@ def run(out):
                     if stopped() or utc()>=cutoff:break
                     gross,free=ledger.snapshot()
                     if free<2:break
-                    q=market.quotes([symbol])[symbol];time.sleep(.2);prices=qualified_quote(q,utc())
+                    quote_batch,received_at=fetch_entry_quotes(lambda:market.quotes([symbol]),(symbol,),
+                        evidence=lambda r:record_quote_decision(out/'quote_decisions.jsonl',r))
+                    q=quote_batch.get(symbol);time.sleep(.2)
+                    prices=qualified_quote(q,utc(),symbol=symbol,received_at=received_at,
+                        evidence=lambda r:record_quote_decision(out/'quote_decisions.jsonl',r))
                     if not prices:state['quote_skips']+=1;continue
                     limit,_=prices
-                    if Decimal(str(q['bp']))<=Decimal(row['breakout_level']) or limit>Decimal(row['signal_close'])*Decimal('1.003'):state['quote_skips']+=1;continue
+                    if qualified_quote(q,utc(),symbol=symbol,received_at=received_at,signal_row=row,phase='entry_signal',
+                        evidence=lambda r:record_quote_decision(out/'quote_decisions.jsonl',r)) is None:state['quote_skips']+=1;continue
                     account=observer.account()
                     size=size_long_entry(config,equity=account['equity'],cash=min(Decimal(account['cash']),free),session_start_equity=state['starting_equity'],entry_price=limit,stop_price=limit*Decimal('.99'),gross_open_notional=gross)
                     if not size.allowed:continue
@@ -187,7 +193,7 @@ def run(out):
                     job={'plan':asdict(plan),'journal':str(out/f"cycle_{state['cycles']:05d}.journal"),'status_file':str(out/f"cycle_{state['cycles']:05d}.json"),'done':False,'started_at':utc().isoformat()}
                     with guard_lock:jobs[symbol]=job
                     last_exit.pop(symbol,None);seen.add((symbol,row['signal_at']));persist()
-                    thread=threading.Thread(target=worker,args=(symbol,plan,q,row,size,job),name='paper-'+symbol,daemon=False)
+                    thread=threading.Thread(target=worker,args=(symbol,plan,q,row,size,job,received_at),name='paper-'+symbol,daemon=False)
                     job['thread']=thread;thread.start()
                 time.sleep(2)
         except Exception as error:

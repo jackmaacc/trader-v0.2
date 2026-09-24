@@ -126,7 +126,7 @@ extern "C" int etf_scenario(
                 if(distance<=0||distance>=fill||(family==0&&c.target<=fill))continue;
                 double eq=equity(),gross=0.,risk=0.,cluster=0.;
                 for(int k:order){const auto& p=pos[k];gross+=p.qty*marks[k];
-                    risk+=p.qty*std::max(marks[k]-p.stop*(1-impact)*(1-commission),0.);
+                    risk+=p.qty*std::max(marks[k]-std::min(marks[k],p.stop)*(1-impact)*(1-commission),0.);
                     if(k<3)cluster+=p.qty*marks[k];}
                 double cap=family==1?std::min(limits[2],limits[5]):limits[2];
                 double per_cost=fill*(1+commission)-raw;

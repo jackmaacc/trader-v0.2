@@ -61,13 +61,13 @@ def run_shadow(*, context, histories, quotes, spec:StrategySpec, risk, positions
         if signal is not None:row['signal']=asdict(signal)
         if reason is None and not opened+pd.Timedelta(minutes=30)<=asof<closed-pd.Timedelta(minutes=5):reason='outside_execution_window'
         supplied=quotes.get(symbol)
+        envelope=(supplied.envelope if supplied is not None else
+                  QuoteEnvelope(symbol,'sip',asof.isoformat(),asof.isoformat(),None))
+        current=QuoteEnvelope(envelope.symbol,envelope.feed,envelope.received_at,asof.isoformat(),envelope.raw_payload)
+        validation=validate_quote(current,QuotePolicy(expected_feed='sip'),expected_symbol=symbol)
+        row['quote']=validation.to_record()
         if supplied is None:reason=reason or 'missing_quote'
-        else:
-            envelope=supplied.envelope
-            current=QuoteEnvelope(envelope.symbol,envelope.feed,envelope.received_at,asof.isoformat(),envelope.raw_payload)
-            validation=validate_quote(current,QuotePolicy(expected_feed='sip'))
-            row['quote']=validation.to_record()
-            if envelope.symbol!=symbol or not validation.valid:reason=reason or 'invalid_or_stale_quote'
+        elif not validation.valid:reason=reason or 'invalid_or_stale_quote'
         if reason is not None:
             row['reason']=reason;decisions.append(row);continue
         if symbol in {p['symbol'] for p in owned}:
@@ -90,18 +90,22 @@ def run_shadow(*, context, histories, quotes, spec:StrategySpec, risk, positions
         risk_used=sum(float(p['quantity'])*max(0,float(p['price'])-float(p['stop_price'])+float(p.get('exit_cost_per_share',float(p['stop_price'])*(1-(1-impact)*(1-commission))))) for p in owned)
         cap=min(spec.max_gross,spec.max_overnight) if spec.family=='MOM' else spec.max_gross
         per_cost=price*(1+commission)-raw
-        stop_cost=price*(1+commission)-stop*(1-impact)*(1-commission)
+        executable_stop=min(stop,float(quote.bid))
+        exit_cost=stop-executable_stop*(1-impact)*(1-commission)
+        stop_cost=price*(1+commission)-executable_stop*(1-impact)*(1-commission)
         limits=[remaining/(price*(1+commission)),spec.max_trade_risk*equity/stop_cost,
                 max(0,spec.max_portfolio_risk*equity-risk_used)/(stop_cost+spec.max_portfolio_risk*per_cost),
                 max(0,cap*equity-gross)/(raw+cap*per_cost),spec.max_name*equity/(raw+spec.max_name*per_cost)]
         if symbol in ('SPY','QQQ','IWM'):limits.append(max(0,spec.max_equity_cluster*equity-cluster)/(raw+spec.max_equity_cluster*per_cost))
         quantity=max(0,math.floor(min(limits)))
         check=risk.approve_entry(symbol,quantity,price,stop,owned,overnight=spec.family=='MOM',
-              one_way_impact_bps=impact*10000,commission_bps=spec.commission_bps,cash=remaining)
+              one_way_impact_bps=impact*10000,commission_bps=spec.commission_bps,cash=remaining,reference_price=quote.bid)
         row.update(eligible=check.allow_entries,reason=check.reason,quantity=quantity if check.allow_entries else 0,
-                   proposed_entry=price,proposed_stop=stop,risk_decision=asdict(check))
+                   proposed_entry=price,proposed_stop=stop,proposed_stop_execution=executable_stop,
+                   risk_decision=asdict(check))
         if check.allow_entries:
-            owned.append(dict(symbol=symbol,quantity=quantity,price=price,stop_price=stop,overnight=spec.family=='MOM'))
+            owned.append(dict(symbol=symbol,quantity=quantity,price=price,stop_price=stop,overnight=spec.family=='MOM',
+                              exit_cost_per_share=exit_cost))
             remaining-=quantity*price*(1+commission)
         decisions.append(row)
     def write(name,value):
