@@ -17,7 +17,7 @@ from urllib.parse import quote,urlencode
 from urllib.request import Request,build_opener,HTTPRedirectHandler
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'src'))
-from trader_engine.research.market_scanner import FUTURES,observe,futures_snapshot,summarize
+from trader_engine.research.market_scanner import FUTURES,observe,futures_snapshot,summarize,FuturesWindowEmpty
 from trader_engine.execution.journal import ExecutionLock
 from trader_engine.data.market_feed import StockFeedConfig
 
@@ -36,13 +36,12 @@ def atomic(path,payload):
     finally:os.close(fd)
 
 def credentials():
-    key=os.environ.get('APCA_API_KEY_ID');secret=os.environ.get('APCA_API_SECRET_KEY')
-    if key and secret:return key,secret
-    result=subprocess.run(['/usr/bin/security','find-generic-password','-s','codex.alpaca-mcp.paper','-a','alpaca-paper','-w'],capture_output=True,text=True,check=False)
-    if result.returncode:raise ScanError('credential_lookup_failed')
+    from trader_engine.operations.credentials import paper_credentials, CredentialError
     try:
-        data=json.loads(result.stdout);return data['ALPACA_API_KEY'],data['ALPACA_SECRET_KEY']
-    except Exception:raise ScanError('credential_record_invalid') from None
+        return paper_credentials()
+    except CredentialError as exc:
+        raise ScanError(str(exc)) from None
+
 
 class ReadOnlyTransport:
     ORIGINS={'paper':'https://paper-api.alpaca.markets','data':'https://data.alpaca.markets','yahoo':'https://query1.finance.yahoo.com'}
@@ -181,7 +180,7 @@ class Scanner:
             step=1 if kind=='futures' else 200
             bad=False
             for offset in range(0,len(symbols),step):
-                batch=symbols[offset:offset+step];failure=None;payload={};symbol_failures={}
+                batch=symbols[offset:offset+step];failure=None;payload={};symbol_failures={};history_range=None
                 status['stage']=name+':batch_'+str(offset//step+1)+'_of_'+str((len(symbols)+step-1)//step)
                 atomic(self.directory/'status.json',dict(status,checked_at=self.now().isoformat()))
                 try:
@@ -196,7 +195,16 @@ class Scanner:
                         payload=response.get('snapshots',{}) if isinstance(response,dict) else None
                     else:
                         response=self.transport.get('yahoo','/v8/finance/chart/'+quote(batch[0],safe=''),{'interval':'1m','range':'1d'})
-                        payload={batch[0]:futures_snapshot(response)}
+                        history_range='1d'
+                        try:
+                            parsed=futures_snapshot(response)
+                        except FuturesWindowEmpty:
+                            history_range='5d'
+                            source['wider_window_requests']=source.get('wider_window_requests',0)+1
+                            response=self.transport.get('yahoo','/v8/finance/chart/'+quote(batch[0],safe=''),{'interval':'1m','range':'5d'})
+                            try:parsed=futures_snapshot(response)
+                            except FuturesWindowEmpty:raise ScanError('futures_window_has_no_priced_bars') from None
+                        payload={batch[0]:parsed}
                     if not isinstance(payload,dict):raise ScanError('snapshot_response_invalid')
                 except (ScanError,ValueError,TypeError,KeyError,AttributeError) as exc:
                     failure=str(exc) if isinstance(exc,ScanError) else 'source_payload_invalid';bad=True;source['error']=failure
@@ -204,6 +212,7 @@ class Scanner:
                 for s in batch:
                     value=payload.get(s) if isinstance(payload,dict) else None
                     row=observe(s,kind,value,self.now(),market_open=market_open,previous=self.previous.get((kind,s)),failure=symbol_failures.get(s,failure),feed=self.feed)
+                    if kind=='futures':row['history_range_requested']=history_range
                     row['currently_active']=True;records[indices[(kind,s)]]=row
                     if value is not None and not failure and s not in symbol_failures:source['received']+=1
                     if row['state'] in ('missing','invalid','unavailable','stale'):bad=True

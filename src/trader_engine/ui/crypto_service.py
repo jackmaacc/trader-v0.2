@@ -44,7 +44,7 @@ def render_crypto_service(artifacts_dir):
     else:
         st.error(message)
     st.write('BTC and ETH only. Completed daily close above the 200-day average: hold or enter. At or below: sell the owned position on the next successful worker check.')
-    st.caption('Checks run every minute on this Mac. Sleep, lost connectivity or broker/data errors can delay exits. The daily rule is not an intraday stop. Research results remain unqualified.')
+    st.caption('Checks run every minute on the configured execution host. Sleep, lost connectivity or broker/data errors can delay exits. The daily rule is not an intraday stop. Research results remain unqualified.')
     if payload.get('decisions'):
         with st.expander('Latest decisions'):
             st.json(payload['decisions'])

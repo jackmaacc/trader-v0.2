@@ -1,0 +1,19 @@
+# Rendered only; installation and activation require operator review.
+[Unit]
+Description=trader-v0.2 paper-trial
+After=network-online.target
+Wants=network-online.target
+# Deliberately disabled; no execution flag and no install target.
+ConditionPathExists="/home/trader/trader-state/PAPER_TRIAL_OBSERVATION_ENABLED"
+
+[Service]
+Type=simple
+WorkingDirectory="/home/trader/trader-v0.2"
+UMask=0077
+Environment=PYTHONUNBUFFERED=1
+ExecStart="/home/trader/trader-v0.2/.venv/bin/python" "/home/trader/trader-v0.2/scripts/paper_trial_service.py" "--directory" "/home/trader/trader-state/paper_trial" "--artifacts" "/home/trader/trader-state"
+Restart=no
+RestartSec=10
+TimeoutStopSec=90
+KillMode=control-group
+NoNewPrivileges=true

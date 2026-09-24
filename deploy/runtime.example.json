@@ -1,0 +1,8 @@
+{
+  "repo_root": "/home/trader/trader-v0.2",
+  "python": "/home/trader/trader-v0.2/.venv/bin/python",
+  "state_root": "/home/trader/trader-state",
+  "secrets_file": "/home/trader/.config/trader/alpaca.env",
+  "expected_account_id": null,
+  "stock_feed": "sip"
+}

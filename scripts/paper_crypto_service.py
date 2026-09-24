@@ -49,14 +49,12 @@ def atomic(path, value):
     finally:os.close(fd)
 
 def credentials():
-    key=os.environ.get('APCA_API_KEY_ID');secret=os.environ.get('APCA_API_SECRET_KEY')
-    if key and secret:return key,secret
-    result=subprocess.run(['/usr/bin/security','find-generic-password','-s','codex.alpaca-mcp.paper','-a','alpaca-paper','-w'],capture_output=True,text=True,check=False)
-    if result.returncode:raise ServiceError('Paper credential lookup failed')
+    from trader_engine.operations.credentials import paper_credentials, CredentialError
     try:
-        record=json.loads(result.stdout)
-        return record['ALPACA_API_KEY'],record['ALPACA_SECRET_KEY']
-    except (KeyError,ValueError,TypeError):raise ServiceError('Invalid paper credential record') from None
+        return paper_credentials()
+    except CredentialError as exc:
+        raise ServiceError(str(exc)) from None
+
 
 class CryptoPaperClient(AlpacaPaperClient):
     def submit(self,payload):

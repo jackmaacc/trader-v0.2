@@ -8,3 +8,5 @@ plotly>=6.0
 scikit-learn>=1.5
 yfinance>=0.2.54
 pytest>=8.0
+websockets>=15,<17
+msgpack>=1.0,<2

@@ -3,7 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 import pytest
-from trader_engine.research.market_scanner import observe,futures_snapshot,summarize
+from trader_engine.research.market_scanner import observe,futures_snapshot,summarize,FuturesWindowEmpty
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('scanner_service',ROOT/'scripts/market_scanner_service.py')
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
@@ -210,3 +210,76 @@ def test_transient403_recovers_once_before_bisection(tmp_path):
     transport=Transient();scanner=m.Scanner(transport,tmp_path,feed='sip');budget=[32]
     data,errors=scanner.stock_batch(['A','B'],budget)
     assert set(data)=={'A','B'} and errors=={} and transport.calls==2 and budget==[31]
+
+
+def test_midnight_yahoo_empty_daily_window_is_distinguished_from_malformed_data():
+    # Shape observed from public ES=F and GC=F at 2026-09-24 04:08 UTC.
+    # Metadata has a last price/time, but there are no actual chart bars to use.
+    daily={'chart':{'error':None,'result':[{'meta':{'symbol':'ES=F','regularMarketTime':1790222276,'regularMarketPrice':7758.75},'indicators':{'quote':[{}]}}]}}
+    with pytest.raises(FuturesWindowEmpty,match='no_priced_bars'):
+        futures_snapshot(daily)
+    malformed={'chart':{'error':None,'result':[{'timestamp':[1790222276],'indicators':{'quote':[{}]}}]}}
+    with pytest.raises(ValueError) as exc:futures_snapshot(malformed)
+    assert not isinstance(exc.value,FuturesWindowEmpty)
+
+
+def test_wider_futures_window_uses_actual_latest_priced_bar_and_preserves_age():
+    now=datetime(2026,9,24,4,8,6,tzinfo=timezone.utc)
+    payload={'chart':{'error':None,'result':[{'meta':{'regularMarketTime':1790222276,'regularMarketPrice':99999},'timestamp':[1790222160,1790222220,1790222276,1790222280], 'indicators':{'quote':[{'close':[7758.5,7758.75,7758.75,None]}]}}]}}
+    snapshot=futures_snapshot(payload)
+    row=observe('ES=F','futures',snapshot,now)
+    assert row['price']==7758.75 and row['data_asof']==datetime.fromtimestamp(1790222276,timezone.utc).isoformat()
+    assert row['age_seconds']==610 and row['state']=='indicative_unknown_latency'
+    assert not row['execution_eligible'] and row['source']=='indicative_continuous_futures_proxy'
+    old=observe('ES=F','futures',snapshot,now+timedelta(hours=1))
+    assert old['state']=='stale' and old['price']==7758.75
+
+
+@pytest.mark.parametrize('closes',[[],[None,None]])
+def test_empty_or_all_null_futures_window_never_fabricates_metadata_price(closes):
+    times=[1790222160,1790222220][:len(closes)]
+    payload={'chart':{'result':[{'meta':{'regularMarketPrice':100},'timestamp':times,'indicators':{'quote':[{'close':closes}]}}]}}
+    with pytest.raises(FuturesWindowEmpty):futures_snapshot(payload)
+
+
+@pytest.mark.parametrize('times',[[1790222220,1790222160],[1790222160,1790222160],[True,1790222160]])
+def test_unordered_or_invalid_futures_times_do_not_trigger_empty_window_fallback(times):
+    payload={'chart':{'result':[{'timestamp':times,'indicators':{'quote':[{'close':[100,101]}]}}]}}
+    with pytest.raises(ValueError) as exc:futures_snapshot(payload)
+    assert not isinstance(exc.value,FuturesWindowEmpty)
+
+
+def test_futures_service_empty_window_fallback_is_bounded_and_symbol_isolated(tmp_path):
+    from urllib.parse import unquote
+    empty={'chart':{'error':None,'result':[{'meta':{'regularMarketPrice':99999},'indicators':{'quote':[{}]}}]}}
+    valid={'chart':{'error':None,'result':[{'timestamp':[(NOW-timedelta(minutes=10)).timestamp()],'indicators':{'quote':[{'close':[101]}]}}]}}
+    malformed={'chart':{'error':None,'result':[{'timestamp':[NOW.timestamp()],'indicators':{'quote':[{}]}}]}}
+    class Futures(Fake):
+        def __init__(self):super().__init__();self.calls=[]
+        def get(self,source,path,params=None):
+            if source!='yahoo':return super().get(source,path,params)
+            symbol=unquote(path.rsplit('/',1)[-1]);window=params['range'];self.calls.append((symbol,window))
+            assert params['interval']=='1m'
+            if symbol=='CL=F':raise m.ScanError('http_503')
+            if symbol=='GC=F':return malformed
+            if symbol=='NQ=F':return empty
+            if symbol in ('ES=F','RTY=F','SI=F'):
+                if window=='1d':return empty
+                if symbol=='RTY=F':return malformed
+                if symbol=='SI=F':raise m.ScanError('http_429')
+            return valid
+    transport=Futures();scanner=m.Scanner(transport,tmp_path,now=lambda:NOW)
+    status=scanner.cycle()
+    rows={row['symbol']:row for row in json.loads((tmp_path/'latest.json').read_text())['records']}
+    assert len(transport.calls)==12 # Eight initial requests plus four wider windows.
+    assert status['sources']['futures']['wider_window_requests']==4
+    assert status['sources']['futures']['received']==3
+    assert rows['ES=F']['history_range_requested']=='5d'
+    assert rows['ES=F']['state']=='indicative_unknown_latency' and rows['ES=F']['age_seconds']==600
+    assert rows['YM=F']['history_range_requested']=='1d' and rows['YM=F']['price']==101
+    assert rows['NQ=F']['reason']=='futures_window_has_no_priced_bars'
+    assert rows['NQ=F']['price'] is None # Never fabricate metadata price.
+    assert rows['GC=F']['reason']=='source_payload_invalid'
+    assert ('GC=F','5d') not in transport.calls and ('CL=F','5d') not in transport.calls
+    assert rows['SI=F']['reason']=='http_429' and rows['RTY=F']['reason']=='source_payload_invalid'
+    assert rows['BTC/USD']['state']=='fresh' # Independent crypto source still succeeds.

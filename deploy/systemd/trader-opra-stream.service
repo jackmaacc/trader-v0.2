@@ -1,0 +1,21 @@
+# Rendered only; installation and activation require operator review.
+[Unit]
+Description=trader-v0.2 opra-stream
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory="/home/trader/trader-v0.2"
+UMask=0077
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile="/home/trader/.config/trader/alpaca.env"
+ExecStart="/home/trader/trader-v0.2/.venv/bin/python" "/home/trader/trader-v0.2/scripts/plus_stream_service.py" "--directory" "/home/trader/trader-state/plus_options_stream" "--feed" "opra" "--options-file" "/home/trader/trader-state/plus_research/options.json" "--max-option-quotes" "100"
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=90
+KillMode=control-group
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

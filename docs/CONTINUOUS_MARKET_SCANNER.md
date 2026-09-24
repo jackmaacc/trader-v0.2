@@ -33,3 +33,8 @@ HTTP 403 recovery uses a same-feed retry, then batch subdivision if necessary, w
 Validation: 115 focused tests passed across scanner, dashboard, market-feed configuration, market catalog and existing crypto management. Independent scanner/UI review passed 40 tests. A Streamlit AppTest rendered all 13,539 actual instrument records with no exceptions. Existing paper-worker status remained running with no pending order. Raw market data and credentials are excluded from the commit.
 
 The subscription's options data and higher streaming limits are not yet integrated into this worker. Futures remain public indicative proxies. Strategy changes and wider execution require separate validation; this deployment improves observation coverage and persistence.
+
+
+## Empty futures window recovery
+
+On September 24 at midnight Eastern, public futures charts returned a valid empty `1d` window. The scanner now makes one `5d` request only for that recognized empty-window shape. Malformed payloads and HTTP failures do not trigger the fallback. Returned prices retain their actual timestamps and indicative-only classification; no metadata price is substituted for a missing bar. If both windows are empty, the source remains unavailable. The deployed read-only scanner subsequently received all eight proxies again. No paper execution service was restarted for this fix.

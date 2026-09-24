@@ -122,13 +122,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--directory', type=Path, default=ROOT/'artifacts/plus_research')
     parser.add_argument('--once', action='store_true')
+    parser.add_argument('--artifacts', type=Path, default=ROOT/'artifacts')
     args = parser.parse_args()
     key, secret = credentials()
     tag = hashlib.sha256(key.encode()).hexdigest()[:24]
     stop = [False]
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: stop.__setitem__(0, True))
-    service = ResearchService(PlusRESTClient(key, secret, max_pages=10), args.directory, ROOT/'artifacts')
+    service = ResearchService(PlusRESTClient(key, secret, max_pages=10), args.directory, args.artifacts)
     lock = Path(tempfile.gettempdir())/('trader-engine-plus-research-'+tag+'.lock')
     with ExecutionLock(lock):
         while not stop[0] and not (args.directory/'SHUTDOWN').exists():

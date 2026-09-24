@@ -498,3 +498,10 @@ The reproducible seed generates 5,000 distinct rule sets and evaluates each at b
 The September 23 rapid paper test exposed logging failures that interrupted exits. The new paper-only adapter, bounded durable journal and explicit order lifecycle separate persistence from risk reduction and reconcile ambiguous orders without blind retries. The earlier backtest PaperBroker remains unchanged.
 
 `python scripts/paper_execution.py --symbol SPY --limit-price 100 --stop-price 99` previews configurable whole-share sizing offline (75 shares / $7,500 for the example account). It does not connect to a broker by default. The optional manual execution flag performs one immediate-exit paper experiment only; it is not an automated strategy or unattended trading service. Larger settings remain dormant. See [the repair notes](docs/PAPER_EXECUTION_FIXES.md) for test coverage, requirements and unresolved hard-crash limitations. Old one-off burst scripts are retained as evidence and must not be reused for trading.
+
+
+## Multi-asset project and portable operation
+
+The accepted roadmap is in [PROJECT_ROADMAP.md](docs/PROJECT_ROADMAP.md); current component authority is documented in [COMPONENT_INVENTORY.md](docs/COMPONENT_INVENTORY.md). The new pilot mandate is planning-only and does not change the running paper policy.
+
+See [PAPER_TRIAL.md](docs/PAPER_TRIAL.md) for the persistent 30-day operational observer and [PORTABLE_DEPLOYMENT.md](docs/PORTABLE_DEPLOYMENT.md) for Mac development, Windows/WSL2 preparation, private access and deliberate deployment/rollback. Generated templates do not install services or enable trading. Never start a second account executor after cloning the repository.

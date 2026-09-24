@@ -12,6 +12,7 @@ from trader_engine.ui.net_edge import render_net_edge
 from trader_engine.ui.crypto_service import render_crypto_service
 from trader_engine.ui.market_scanner import render_market_scanner
 from trader_engine.ui.plus_capabilities import render_plus_capabilities
+from trader_engine.ui.project_operations import render_project_operations
 
 CORE_STATE_ARTIFACTS = {
     "state_frequency",
@@ -44,6 +45,7 @@ def render_dashboard(artifacts_dir: Path) -> None:
     scanner_root = artifacts_dir if artifacts_dir.name == "artifacts" else artifacts_dir.parent
     render_market_scanner(scanner_root / "continuous_market_scan")
     render_plus_capabilities(scanner_root)
+    render_project_operations(scanner_root)
     render_market_catalog(artifacts_dir.parent / 'market_catalog' / 'catalog.json')
 
     has_net_edge = render_net_edge(artifacts_dir)

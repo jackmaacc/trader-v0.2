@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "purpose": "planning_and_readiness_only_not_executor_configuration",
+  "objective": "absolute_growth_after_trading_costs",
+  "development_host": "mac",
+  "future_runtime": "windows_wsl2_ubuntu",
+  "minimum_paper_continuity_days": 30,
+  "paper_execution_scope_current": ["BTC/USD", "ETH/USD"],
+  "parallel_research": ["equities_etfs", "options", "crypto"],
+  "initial_effort_fraction": {"equities_etfs": 0.45, "options": 0.35, "crypto": 0.20},
+  "future_live_pilot": {
+    "capital_min_usd": 1000,
+    "capital_max_usd": 5000,
+    "borrowing": false,
+    "short_selling": false,
+    "planned_risk_per_trade_fraction": 0.0025,
+    "planned_open_risk_fraction": 0.01,
+    "gross_exposure_fraction": 0.50,
+    "issuer_exposure_fraction": 0.10,
+    "crypto_exposure_fraction": 0.10,
+    "daily_entry_halt_fraction": 0.01,
+    "high_water_drawdown_review_fraction": 0.05,
+    "options_initial": "long_premium_within_full_loss_budget"
+  },
+  "rd_costs": "separate_budget_disclosed",
+  "investment_approval": false,
+  "live_activation": false,
+  "automatic_promotion": false
+}

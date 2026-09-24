@@ -88,9 +88,14 @@ def observe(symbol,asset_class,payload,now,*,market_open=None,previous=None,fail
     except (KeyError,TypeError,ValueError,OverflowError,OSError):
         record.update(state='invalid',reason='invalid_price_timestamp_bar_or_quote');return record
 
+class FuturesWindowEmpty(ValueError):
+    """A valid chart window contains no priced observations; a wider query may help."""
+
+
 def futures_snapshot(payload):
     """Yahoo chart to descriptive snapshot; no contract metadata is inferred."""
     chart=payload.get('chart') if isinstance(payload,dict) else None
+    if isinstance(chart,dict) and chart.get('error') is not None:raise ValueError('Provider reported futures error')
     results=chart.get('result') if isinstance(chart,dict) else None
     if not isinstance(results,list) or len(results)!=1:raise ValueError('Unavailable futures chart')
     result=results[0]
@@ -100,11 +105,16 @@ def futures_snapshot(payload):
     if not isinstance(times,list) or not isinstance(indicators,dict):raise ValueError('Malformed futures observations')
     quotes=indicators.get('quote',[])
     if not isinstance(quotes,list) or not quotes or not isinstance(quotes[0],dict):raise ValueError('Malformed futures bars')
-    closes=quotes[0].get('close',[]);volumes=quotes[0].get('volume',[])
+    closes=quotes[0].get('close',[])
     if not isinstance(closes,list) or len(times)!=len(closes):raise ValueError('Mismatched futures bars')
+    stamps=[]
+    for value in times:
+        if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value):raise ValueError('Invalid futures timestamp')
+        stamps.append(timestamp(value))
+    if any(current<=previous for previous,current in zip(stamps,stamps[1:])):raise ValueError('Unordered futures timestamps')
     candidates=[i for i,c in enumerate(closes) if c is not None]
-    if not candidates:raise ValueError('No futures prices')
-    i=candidates[-1];price=finite(closes[i],True);stamp=timestamp(times[i]).isoformat()
+    if not candidates:raise FuturesWindowEmpty('futures_window_has_no_priced_bars')
+    i=candidates[-1];price=finite(closes[i],True);stamp=stamps[i].isoformat()
     output={'latestTrade':{'p':price,'t':stamp}}
     metadata=result.get('meta',{})
     if not isinstance(metadata,dict):raise ValueError('Malformed futures metadata')
