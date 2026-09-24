@@ -78,3 +78,7 @@ SSH's `-L` supports an explicit loopback bind address. [OpenSSH manual](https://
 Deploy an explicit reviewed commit; never run an automatic `git pull` inside an execution service. Keep a version/dependency manifest with each deployment. Update and test a separate checkout/environment while the running version remains stable. Preserve state schema compatibility, stop/reconcile before changing the execution owner, and restart only after approval. Logs, environment files, deployment manifests with local identifiers, downloaded datasets and account state stay outside Git. Existing ignore rules must be checked before staging; ignore rules do not protect already tracked files.
 
 Phase 1 does not provide cross-host fencing, high availability, automatic failover, remote command authorization, native Windows support, guaranteed PC wake/boot operation or completed PC verification. Those require explicit implementation and host testing before claiming unattended reliability.
+
+## Release and recovery tools
+
+[RELEASE_WORKFLOW.md](RELEASE_WORKFLOW.md) describes clean-commit receipts and host-specific revalidation. [TRIAL_BACKUPS.md](TRIAL_BACKUPS.md) provides online observation-ledger snapshots and isolated restore exercises. Both are local tools; neither deploys services or activates orders. The September 24 Mac exercise verified a real ledger snapshot and isolated copy while the original observer retained its history. Scheduled/off-machine backups and full execution-state recovery remain pending.

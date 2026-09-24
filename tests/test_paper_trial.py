@@ -22,6 +22,7 @@ def test_start_has_no_historic_credit_and_duplicate_heartbeats_are_idempotent(tm
     assert a['started_at']==NOW.isoformat() and a['continuous_seconds']==0
     assert trial.poll(root,NOW)==a
     assert trial.poll(root,NOW+timedelta(seconds=60))['continuous_seconds']==60
+    assert trial.poll(root,NOW)==a # Historical duplicate remains idempotent after newer polls.
     assert trial.db.execute('select count(*) from observations').fetchone()[0]==5
     assert not a['live_approved'] and not a['investment_qualified']
     assert a['asset_status']['equities']=='research_only'
@@ -130,4 +131,69 @@ def test_pending_identity_mismatch_interrupts_without_persisting_ids(tmp_path):
     result=trial.poll(root,NOW)
     assert result['sources'][0]['health']=='state_status_disagreement'
     assert 'PRIVATE-ORDER' not in str(trial.db.execute('select payload from observations').fetchall())
+    trial.close()
+
+
+def test_live_observation_uses_post_read_clock(tmp_path, monkeypatch):
+    from trader_engine.operations import paper_trial as module
+    root=tmp_path/'a';sources(root,NOW);trial=PaperTrial(tmp_path/'l')
+    trial.poll(root,NOW)
+    original=module.read
+    updated=NOW+timedelta(seconds=61)
+    def read_during_update(path):
+        if path.parent.name=='continuous_market_scan':
+            row=json.loads(path.read_text());row['checked_at']=updated.isoformat();path.write_text(json.dumps(row))
+        return original(path)
+    monkeypatch.setattr(module,'read',read_during_update)
+    ticks=iter([NOW+timedelta(seconds=60),NOW+timedelta(seconds=62)])
+    result=trial.poll(root,clock=lambda:next(ticks))
+    assert result['status']=='observing'
+    assert result['checked_at']==(NOW+timedelta(seconds=62)).isoformat()
+    assert result['continuous_seconds']==62
+    trial.close()
+
+
+def test_live_genuine_future_still_records_gap(tmp_path):
+    root=tmp_path/'a';sources(root,NOW+timedelta(seconds=3));trial=PaperTrial(tmp_path/'l')
+    ticks=iter([NOW,NOW+timedelta(seconds=2)])
+    result=trial.poll(root,clock=lambda:next(ticks))
+    assert result['status']=='interrupted'
+    assert all(row['health']=='future_heartbeat' for row in result['sources'])
+    assert result['gap_count']==5
+    trial.close()
+
+
+@pytest.mark.parametrize('wall_seconds,elapsed',[(181,1),(1,181)])
+def test_live_long_acquisition_fails_even_on_first_poll(tmp_path,wall_seconds,elapsed):
+    root=tmp_path/'a';end=NOW+timedelta(seconds=wall_seconds)
+    sources(root,end);trial=PaperTrial(tmp_path/'l')
+    ticks=iter([NOW,end]);monotonic=iter([100,100+elapsed])
+    result=trial.poll(root,clock=lambda:next(ticks),monotonic_clock=lambda:next(monotonic))
+    assert result['status']=='interrupted' and result['continuous_seconds']==0
+    assert trial.db.execute("select reason from gaps where source='collector'").fetchone()[0]=='acquisition_gap'
+    trial.close()
+
+
+@pytest.mark.parametrize('ticks,monotonic',[
+    ([NOW,NOW-timedelta(seconds=1)],[100,101]),
+    ([NOW,NOW+timedelta(seconds=1)],[100,99]),
+])
+def test_live_clock_regression_does_not_write_evidence(tmp_path,ticks,monotonic):
+    root=tmp_path/'a';sources(root,NOW);trial=PaperTrial(tmp_path/'l')
+    ticks=iter(ticks);monotonic=iter(monotonic)
+    with pytest.raises(ValueError,match='clock moved backwards'):
+        trial.poll(root,clock=lambda:next(ticks),monotonic_clock=lambda:next(monotonic))
+    assert trial.db.execute('select count(*) from polls').fetchone()[0]==0
+    trial.close()
+
+
+def test_live_fix_preserves_existing_gap_history(tmp_path):
+    root=tmp_path/'a';sources(root,NOW+timedelta(seconds=1));trial=PaperTrial(tmp_path/'l')
+    trial.poll(root,NOW)
+    gaps=trial.db.execute('select id,source,started_at,reason from gaps').fetchall()
+    sources(root,NOW+timedelta(seconds=60))
+    ticks=iter([NOW+timedelta(seconds=60),NOW+timedelta(seconds=61)])
+    result=trial.poll(root,clock=lambda:next(ticks))
+    assert result['status']=='observing' and result['continuous_seconds']==0
+    assert trial.db.execute('select id,source,started_at,reason from gaps').fetchall()==gaps
     trial.close()

@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import time
 
 SOURCES = {'paper_crypto_service': 180, 'continuous_market_scan': 600,
            'plus_stream': 600, 'plus_options_stream': 600, 'plus_research': 600}
@@ -126,16 +127,33 @@ class PaperTrial:
     def close(self):
         self.db.close()
 
-    def poll(self, artifacts, now=None):
-        now = utc(now or datetime.now(timezone.utc)); stamp = now.isoformat()
-        previous_poll = self.db.execute('SELECT summary FROM polls WHERE observed_at=?', (stamp,)).fetchone()
-        if previous_poll: return json.loads(previous_poll[0])
+    def poll(self, artifacts, now=None, *, clock=None, monotonic_clock=None):
+        # Live evidence is observed only after acquisition. Explicit historical
+        # timestamps retain deterministic replay/idempotence semantics.
+        live = now is None
+        clock = clock or (lambda: datetime.now(timezone.utc))
+        monotonic_clock = monotonic_clock or time.monotonic
+        acquisition_start = utc(clock()) if live else utc(now)
+        monotonic_start = monotonic_clock() if live else None
+        if not live:
+            previous_poll = self.db.execute('SELECT summary FROM polls WHERE observed_at=?', (acquisition_start.isoformat(),)).fetchone()
+            if previous_poll: return json.loads(previous_poll[0])
         meta = dict(self.db.execute('SELECT key,value FROM meta'))
-        if meta.get('last_poll') and now < utc(meta['last_poll']):
+        if meta.get('last_poll') and acquisition_start < utc(meta['last_poll']):
             raise ValueError('observation clock moved backwards')
         raw = {s: read(Path(artifacts)/s/'status.json') for s in SOURCES}
         options = read(Path(artifacts)/'plus_research/options.json')
         broker_state = read(Path(artifacts)/'paper_crypto_service/state.json')
+        now = utc(clock()) if live else acquisition_start
+        acquisition_seconds = 0
+        if live:
+            elapsed = monotonic_clock()-monotonic_start
+            if now < acquisition_start or elapsed < 0:
+                raise ValueError('observation clock moved backwards')
+            acquisition_seconds = max(elapsed, (now-acquisition_start).total_seconds())
+        stamp = now.isoformat()
+        previous_poll = self.db.execute('SELECT summary FROM polls WHERE observed_at=?', (stamp,)).fetchone()
+        if previous_poll and acquisition_seconds <= 180: return json.loads(previous_poll[0])
         crypto = raw['paper_crypto_service']
         crypto['_state_pending'] = broker_state.get('pending')
         def owned(value):
@@ -156,6 +174,8 @@ class PaperTrial:
         failures = {}
         if meta.get('last_poll') and (now-utc(meta['last_poll'])).total_seconds() > 180:
             failures['collector'] = 'observation_gap'
+        if acquisition_seconds > 180:
+            failures['collector'] = 'acquisition_gap'
         for source in SOURCES:
             heartbeat, age, state = health(source, raw[source], now)
             sources.append({'source': source, 'heartbeat_at': heartbeat, 'age_seconds': age, 'health': state})
