@@ -1,0 +1,11 @@
+# Independent modeled-book accounting
+
+`research.phase3_accounting.audit_database` reads and verifies one durable research database snapshot. Starting from the required flat $100,000 initializer, it reconstructs every saved cash, quantity and receivable boundary without calling the trading transitions. It independently checks the fill journal is append-only and calculates fill cash/units from quantity, execution price and explicit fees. A valid hash chain alone cannot make incorrect balances reconcile.
+
+It covers daily equities/crypto, benchmark ETF/crypto books and standard long options. Crypto base-asset fees reduce acquired units or increase units consumed by a sell; they also enter fee attribution at that fill's price. Remaining precision dust stays owned and needs a terminal mark. Options use the standard 100-share multiplier. FIFO allocates entry/exit fees, carries remaining basis, and adjusts whole-unit splits without creating profit. Dividends accrue once as receivables; a verified payment transfers them to cash without adding income twice.
+
+Optional `terminal_marks` are exact decimal strings keyed by the actual owned instrument, including option contract symbols. Missing marks return `inconclusive` with no P&L metrics, while retaining per-transition reconciliation results. Supplied marks are valuation assertions, not independently authenticated source observations. The audit reports net modeled P&L **before business overhead**. Execution prices already contain modeled spread/impact; `realized_gross_at_execution_prices` is not frictionless before-cost strategy expectancy.
+
+Cash and position comparisons are exact. Proportional FIFO allocation uses 256-digit Decimal arithmetic and an explicit $1e-24 terminal attribution tolerance; the actual residual is reported. Unsupported or internally contradictory fill/action evidence raises an error. Incorrect saved balances return `mismatch`, including the affected operation IDs. No adjustment is added to force a match.
+
+These are research records, not broker activities. This audit cannot prove source completeness/authenticity, qualify a prospective sample, handle unimplemented option exercise/assignment or fractional cash-in-lieu, or establish a profitable edge. It does not write the database, contact a broker or authorize execution.
