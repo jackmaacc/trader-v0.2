@@ -1,6 +1,6 @@
 # Phase 1 acceptance: portable operations
 
-Status September 24, 2026: **in progress, not accepted**. The user reports a PC with WSL2 and remote access. Its private connection target, login and repository path are still needed before host inspection. No PC connection or service cutover has occurred.
+Status September 24, 2026: **in progress, not accepted**. The user reports a PC with WSL2 and remote access. The user has deferred PC transfer until after Mac-side Phases 1–3 work. Its private connection target, login and repository path will be needed at that stage. No PC connection or service cutover has occurred.
 
 ## Completed engineering evidence
 
@@ -27,3 +27,9 @@ A systemd system-manager probe does not validate the user manager used by the te
 Use a separate no-broker acceptance worker for failure drills. Do not interrupt the current Mac trading owner to test infrastructure. Controlled Windows reboot, WSL shutdown and network interruption must be scheduled for the actual host after identifying other workloads. Review the concrete handoff before stopping risk management or transferring writer authority.
 
 Phase 1 closes only when its required host, recovery, backup, fencing and alert evidence is recorded and independently reviewed. Live trading and investment qualification remain separate gates.
+
+## Host interruption diagnosis — September 24
+
+Read-only `pmset` evidence at 15:46–15:47 UTC identified repeated `Clamshell Sleep` and maintenance sleep on battery, including sleep at 14:47:03 UTC and a full lid-triggered wake at 15:41:08 UTC. The Mac reported 21% battery, discharging, and no active system-wide PreventSystemSleep assertion. This establishes actual host sleep during the broad heartbeat interruptions; it does not independently explain every broker transport error.
+
+Sanitized local evidence: `artifacts/phase123_20260924T154714Z/sleep-evidence.json` and `host.json`. The host probe now marks battery power as failed continuous-host readiness and never treats AC power alone as uptime proof. The runtime needs an awake, powered Mac until PC migration; no power settings or services were changed.

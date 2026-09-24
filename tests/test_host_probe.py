@@ -138,3 +138,22 @@ def test_malformed_version_not_republished(tmp_path):
         return runner(args, **kwargs)
     result = probe(tmp_path, runner=malformed)
     assert 'PRIVATE_VALUE' not in json.dumps(result)
+
+@pytest.mark.parametrize('power,status,source,percent', [
+    ("Now drawing from 'Battery Power'\n -InternalBattery-0 21%; discharging", 'fail', 'battery', 21),
+    ("Now drawing from 'AC Power'\n -InternalBattery-0 100%; charged", 'unverified', 'ac', 100),
+    ('PRIVATE_ARBITRARY_OUTPUT', 'unverified', 'unknown', None),
+])
+def test_mac_power_cannot_certify_uptime(tmp_path, power, status, source, percent):
+    def mac_runner(args, **kwargs):
+        if args[0] == '/usr/bin/python3':
+            return SimpleNamespace(returncode=0, stdout=json.dumps({'version': [3,12,1], 'platform':'darwin', 'fcntl':True}))
+        if args[0] == 'launchctl':
+            return SimpleNamespace(returncode=0, stdout='')
+        assert args == ['pmset', '-g', 'batt']
+        return SimpleNamespace(returncode=0, stdout=power)
+    report = probe_host(config(tmp_path), system='Darwin', release='test', runner=mac_runner)
+    check = next(c for c in report['checks'] if c['name']=='continuous_host_power')
+    assert (check['status'],check['detail']['source'],check['detail']['battery_percent']) == (status,source,percent)
+    assert 'PRIVATE_ARBITRARY_OUTPUT' not in json.dumps(report)
+    assert report['execution_authorized'] is False

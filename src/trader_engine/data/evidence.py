@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -127,6 +128,8 @@ class EvidenceRecorder:
         self.pages = 0
 
     def request(self, kind, params):
+        if (self.output / "manifest.json").exists():
+            raise ValueError("Evidence archive is finalized")
         if kind not in READ_ONLY_ENDPOINTS:
             raise ValueError("Endpoint is not allowlisted")
         try:
@@ -172,8 +175,47 @@ class EvidenceRecorder:
                         hashes={str(path.relative_to(self.output)): hashlib.sha256(path.read_bytes()).hexdigest()
                                 for path in sorted(self.output.rglob("*"))
                                 if path.is_file() and path.name != "manifest.json"})
-        (self.output / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
+        encoded = json.dumps(manifest, indent=2, sort_keys=True, allow_nan=False)
+        with (self.output / "manifest.json").open('x') as stream:
+            stream.write(encoded)
+            stream.flush()
+            os.fsync(stream.fileno())
         return manifest
+
+
+def verify_archive(output):
+    """Verify retained bytes, not market correctness or original arrival times."""
+    root = Path(output)
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError('Evidence root must be a real directory')
+    manifest_path = root / 'manifest.json'
+    if manifest_path.is_symlink():
+        raise ValueError('Symlink manifest rejected')
+    manifest = json.loads(manifest_path.read_text())
+    hashes = manifest.get('hashes')
+    if not isinstance(hashes, dict) or not hashes:
+        raise ValueError('Nonempty evidence inventory required')
+    for name, expected in hashes.items():
+        path = Path(name)
+        if path.is_absolute() or '..' in path.parts or path.as_posix() != name or name == 'manifest.json':
+            raise ValueError('Unsafe evidence inventory path')
+        target = root / path
+        if any(p.is_symlink() for p in [target, *target.parents] if p != root.parent):
+            raise ValueError('Symlink evidence rejected')
+        if not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest() != expected:
+            raise ValueError('Evidence missing or hash mismatch')
+    actual = set()
+    for path in root.rglob('*'):
+        if path.is_symlink():
+            raise ValueError('Symlink evidence rejected')
+        if path.is_file() and path != manifest_path:
+            actual.add(path.relative_to(root).as_posix())
+    if actual != set(hashes):
+        raise ValueError('Evidence inventory mismatch')
+    return {'integrity_verified': True, 'files_verified': len(hashes),
+            'acquisition_complete': manifest.get('complete') is True,
+            'qualification_allowed': False,
+            'limitation': 'Hashes are not signatures or proof of source accuracy or historical availability.'}
 
 
 def _pages(recorder, endpoint, params, max_pages):
@@ -320,4 +362,3 @@ def probe_entitlements(output, *, fetcher=None, session="2024-01-03"):
     (recorder.output / "probe.json").write_text(json.dumps(results, indent=2))
     recorder.finish({"kind": "entitlement_probe", "purchases": False, "results": results}, True)
     return results
-

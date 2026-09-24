@@ -92,3 +92,5 @@ The current implementation does not establish cross-host fencing or PC boot/reco
 ## Local host evidence probe
 
 Run `.venv/bin/python scripts/probe_runtime_host.py --manifest /absolute/path/runtime.json --output /absolute/path/new-host-report.json` on the target host. The output parent must exist; reports are exclusive, owner-only files. This bounds local interpreter, supervisor and clock probes and records actual Linux mount types, disk headroom and a Linux boot identity where available. It does not read credentials or contact the broker. Unknown checks stay unverified. Exit zero means no failed local checks, not complete acceptance; execution and PC-acceptance flags remain false. A Linux boot ID cannot establish a Windows reboot.
+
+Mac host inspection also records sanitized power source and battery percentage using a bounded `pmset -g batt` query. Battery operation fails continuous-host readiness. AC power remains insufficient to prove lid-open operation, wake behavior or uninterrupted management.

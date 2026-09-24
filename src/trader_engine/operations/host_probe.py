@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import subprocess
 import uuid
@@ -92,6 +93,15 @@ def probe_host(config, *, runner=subprocess.run, system=None, release=None,
         rc, _ = command(['launchctl', 'print', 'gui/' + str(os.getuid())])
         add('supervisor', 'pass' if rc == 0 else 'unverified', {'kind': 'launchd', 'scope': 'gui', 'worker_health_verified': False})
         add('time_sync', 'unverified', 'Mac clock synchronization was not queried')
+        rc, power = command(['pmset', '-g', 'batt'])
+        source = ('battery' if "Now drawing from 'Battery Power'" in power else
+                  'ac' if "Now drawing from 'AC Power'" in power else 'unknown') if rc == 0 else 'unknown'
+        match = re.search(r'\b(\d{1,3})%;', power) if rc == 0 else None
+        percent = int(match.group(1)) if match and int(match.group(1)) <= 100 else None
+        add('continuous_host_power', 'fail' if source == 'battery' else 'unverified',
+            {'source': source, 'battery_percent': percent,
+             'reason': 'Battery operation cannot satisfy unattended host readiness' if source == 'battery'
+             else 'Power alone does not verify lid-open operation or sleep prevention'})
     else:
         add('supervisor', 'unverified', 'unsupported host')
         add('time_sync', 'unverified', 'unsupported host')

@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "status": "design_only",
+  "execution_authorized": false,
+  "live_authorized": false,
+  "reserved_window": {
+    "start": "2026-10-01",
+    "end": "2027-09-30",
+    "selection": "first 126 exchange sessions for equities/options or UTC days for crypto; exact calendar must be archived before start; no extension or early efficacy assessment"
+  },
+  "minimum_observations": 126,
+  "minimum_closed_episodes": 30,
+  "inference": {
+    "family_slots": 6,
+    "alpha": 0.008333333333333333,
+    "resamples": 100000,
+    "block_lengths": [
+      5,
+      10
+    ],
+    "seed": 20261001,
+    "method": "Joint stationary bootstrap of paired net daily returns and stress/delay vectors; require one-sided lower bounds above zero for both block lengths. One primary comparison per track; no optional stopping or best-control selection."
+  },
+  "activation_gate": "Design freeze only. Before prospective evaluation, independently review executable adapters and archive exact calendar, code, data provenance and measured fee/overhead schedule. Missing gates leave results diagnostic. No automatic paper/live promotion.",
+  "retired": [
+    "MR30",
+    "MR60",
+    "MOM20",
+    "MOM60"
+  ],
+  "legacy_contract": "research/net_edge.py 126-session contract unchanged; these designs cannot be passed to its candidate selector. H1 and its year-long risk-matched proposal remain separate, unapproved and unmodified.",
+  "tracks": [
+    {
+      "id": "E_DONCHIAN20_V1",
+      "asset_class": "equities",
+      "universe": [
+        "SPY",
+        "QQQ",
+        "IWM"
+      ],
+      "hypothesis": "A daily 20-session breakout followed by a 10-session exit earns positive net excess over a lagged exposure-matched ETF basket.",
+      "rules": {
+        "signal": "After each completed regular session: enter if flat and total-return close strictly exceeds maximum of preceding 20 total-return closes excluding current. Exit if held and close is strictly below minimum preceding 10 closes excluding current. No same-session re-entry.",
+        "timing": "Inputs received by 09:20 America/New_York next exchange session; whole-share quantities planned at raw signal close; execute at next regular open, sells first then symbols alphabetically. Missing deadline skips entries and preserves pending exits for first valid open.",
+        "sizing": "Each entry targets 8% of current equity with 24% aggregate entry cap. Quantity floor(0.08*equity/raw_signal_close), reduced only at execution for cash/cap. No leverage, shorting, intraday stop or pyramiding. Holdings drift; cap checked for new entries only.",
+        "startup": "Separate $100000 flat account at start; warmup uses only earlier 21 aligned closes. September 30 signal may queue first October 1 entry."
+      },
+      "costs": {
+        "base": "7 bps adverse per side plus verified applicable fees; no assumed cash interest; distributions receivable until verified pay date. Record business overhead separately and subtract it in business-P&L gates.",
+        "stress": "14 bps per side plus fees; independently replay one additional exchange-session delay at base costs. Quantity never increases from later information."
+      },
+      "benchmarks": {
+        "passive": "24% initial equal-weight SPY/QQQ/IWM basket, cash remainder, first eligible open, no rebalance; same costs, distributions and terminal mark.",
+        "primary": "Daily target equal-weight basket gross fraction equals candidate actual prior-close gross, capped at 24%; next-open whole-share execution using benchmark own equity. Startup uses planned entry weights. Charge all rebalance costs; report gross paired result so benchmark turnover is visible.",
+        "match_gate": "At least 95% of positive-exposure sessions must have planned benchmark gross within 10% of candidate closing gross; failures make risk-matched claim inconclusive. This matches exposure, not beta or realized volatility."
+      },
+      "risk": {
+        "research_capital": 100000,
+        "drawdown_reject": 0.05,
+        "policy": "No daily forced liquidation. 1% prior-UTC-close equity loss blocks new entries for that UTC day, never exits. Daily-bar implementation only checks completed marks and cannot certify intraday compliance. This research policy does not change current service."
+      },
+      "data_prerequisites": [
+        "Exact exchange calendar and arrival timestamps",
+        "Raw execution OHLC plus forward total-return construction",
+        "Verified dividends/splits including QQQ duplicate correction, SPY discrepancy and 90 unknown payment dates; unresolved assets/dates cannot silently disappear",
+        "Observed SIP execution spread/cost calibration and ledger audit"
+      ],
+      "rejection_gates": [
+        "Fewer than 126 complete paired observations or 30 organic closed episodes: inconclusive, never extend to seek a pass. Terminal accounting closes are not organic episodes.",
+        "Missing point-in-time provenance, corporate actions, executable marks, fees, overhead or reconciliation: nonqualifying. Do not delete missing days.",
+        "Nonpositive before-cost expectancy or net excess, nonpositive stressed/delayed net economics, bootstrap lower bound <=0, or portfolio drawdown >5%: reject.",
+        "Removing five best daily net excess contributions must leave positive cumulative excess; report per-symbol contribution and dependence.",
+        "No gate or sizing changes after outcomes. Every variant consumes a family slot and requires a future untouched window."
+      ]
+    },
+    {
+      "id": "O_ETF_TREND_CALL_V1",
+      "asset_class": "options",
+      "universe": [
+        "SPY",
+        "QQQ",
+        "IWM"
+      ],
+      "hypothesis": "Bounded long-call ETF trend entries earn positive net excess over a cash-funded corresponding ETF control matched to lagged delta exposure; premium convexity must cover spread and decay.",
+      "rules": {
+        "signal": "At last exchange close of each ISO week, per underlying, if no position and its total-return close > trailing 200-close arithmetic mean including current, plan one entry. No other entry days; process IWM, QQQ, SPY in that order.",
+        "contract": "At 09:35 America/New_York next session select only standard unadjusted physically delivered 100-share multiplier calls on the signal underlying, expiry 45\u201360 calendar days away. Choose expiry closest to 52 days, earlier expiry tie; strike closest to current SIP midpoint, lower strike tie. Selection uses only contracts listed and quotes received by 09:35; never hindsight volume/open interest.",
+        "quotes": "SIP underlying and OPRA option quotes age <=2 seconds at selection/fill, positive noncrossed bid/ask, both sizes >=1 contract; spread <=10% midpoint. No qualifying contract means skip week. Entry ask, exit bid. No midpoint or touched-limit fills.",
+        "sizing": "Each contract premium plus base fees <=0.25% of current $100000-start equity; total outstanding entry premium <=0.75% equity; at most one contract per underlying and three open positions. Skip if one contract unaffordable. No leverage, spreads, shorts, averaging or premium-budget inflation.",
+        "exit": "At 09:35 on first exchange session after 10 completed holding sessions, or first session after underlying weekly trend fails, or first session with expiry <=21 calendar days, whichever first. Seek first qualifying quote that session; if none preserve ownership/pending exit and mark coverage failure. No invented expiry liquidation; actual exercise/assignment events must reconcile.",
+        "startup": "Flat account at start; 200 prior daily closes for warmup; weekly signal only. Mark open option at fresh bid, unavailable marks block qualification; terminal marks do not count as organic closes."
+      },
+      "costs": {
+        "base": "Observed ask buys/bid sells plus 1% option premium adverse impact each side, verified per-contract broker/exchange/regulatory fees and business overhead. No paper-fill assumption.",
+        "stress": "Double observed half-spread around midpoint plus 2% premium adverse impact, valid positive prices required; delayed case executes same contract one exchange session later at 09:35 with same budget, without reselection."
+      },
+      "benchmarks": {
+        "passive": "0.75% initial equal-weight SPY/QQQ/IWM buy-and-hold cash-funded control plus cash remainder; descriptive only.",
+        "primary": "For each underlying, cash-funded control daily at next09:35 targets prior-close option delta*100*contracts*underlying_close/candidate_equity. Clip negative weights to zero; if summed weights exceed1 scale all proportionally to1. Delta must use archived point-in-time model/inputs and same deterministic method; unavailable delta blocks paired inference. Whole-share ETF control at SIP ask/bid plus7bps impact and fees; own cash ledger, no leverage. Startup uses planned option quantities and decision-time delta. Fees/cash clipping are reported.",
+        "match_gate": "Report delta-notional tracking and gamma/vega/theta exposure; at least95% of positive-target sessions within10% target notional. Delta matching does not match convexity or tail risk. No exact equal-risk claim."
+      },
+      "risk": {
+        "research_capital": 100000,
+        "drawdown_reject": 0.05,
+        "policy": "Full premium is planned maximum contract loss; failed liquidation/exercise can create stock exposure and invalidates lifecycle gate. 1% UTC-day loss blocks new entries only. No options broker activation."
+      },
+      "data_prerequisites": [
+        "Point-in-time full chain listing/standard deliverables and expiry calendar",
+        "Timestamped OPRA/SIP bid ask sizes at decisions exits and daily marks, not current chain reconstructed backward",
+        "Versioned deterministic delta method with point-in-time rates/dividends/volatility inputs",
+        "Verified option fee/exercise/corporate-action lifecycle and account eligibility; historical chain absence means prospective collection required"
+      ],
+      "rejection_gates": [
+        "Fewer than 126 complete paired observations or 30 organic closed episodes: inconclusive, never extend to seek a pass. Terminal accounting closes are not organic episodes.",
+        "Missing point-in-time provenance, corporate actions, executable marks, fees, overhead or reconciliation: nonqualifying. Do not delete missing days.",
+        "Nonpositive before-cost expectancy or net excess, nonpositive stressed/delayed net economics, bootstrap lower bound <=0, or portfolio drawdown >5%: reject.",
+        "Removing five best daily net excess contributions must leave positive cumulative excess; report per-symbol contribution and dependence.",
+        "No gate or sizing changes after outcomes. Every variant consumes a family slot and requires a future untouched window."
+      ]
+    },
+    {
+      "id": "C_SMA200_CONFIRM_V1",
+      "asset_class": "crypto",
+      "universe": [
+        "BTC/USD",
+        "ETH/USD"
+      ],
+      "hypothesis": "The existing SMA200 baseline adds net value over a lagged exposure-matched BTC/ETH basket; this confirms a fixed baseline rather than retuning prior simulations.",
+      "rules": {
+        "signal": "Completed UTC daily close strictly above trailing200 arithmetic mean including current => long; otherwise flat. Uses archived Alpaca venue bars, not substitution of Yahoo indicative history.",
+        "timing": "Decision at00:05UTC using only bars arrived by then; execute first valid venue bid/ask within60seconds, quote age <=2seconds, positive uncrossed. Missing entry quote skips day; missing exit quote retains pending exit and retries next scheduled daily execution, marks failure. Save availability timestamps.",
+        "sizing": "Flat $100000 initial cash; entry targets12.5% equity each,25% aggregate entry cap; no periodic rebalancing, shorting, leverage, stops or pyramiding. Drift allowed; price at signal determines maximum quantity, execution only reduces for budget/precision/minimums.",
+        "exit": "Sell owned quantity at scheduled execution after flat signal; episode closes only on natural signal exit. Terminal valuation at bid is accounting only, not an extra signal/trade.",
+        "halt": "Retain baseline3%UTCday equity-loss entry halt, no forced liquidation; starts from prior UTC close equity, missing baseline blocks entry. Research adapter is separate from running service."
+      },
+      "costs": {
+        "base": "Observed ask/bid, verified fee tier or conservative25bps per side minimum (greater of verified and25), plus5bps adverse impact; model base-asset versus quote-asset fee quantity correctly; overhead separately.",
+        "stress": "Base fee plus15bps impact per side; separate one UTC-day delayed execution, preserve original decisions/quantity and reconcile pending exits."
+      },
+      "benchmarks": {
+        "passive": "25% initial equal-weight BTC/ETH buy-and-hold at first eligible execution, no rebalance, identical fee/mark rules.",
+        "primary": "Daily equal-weight BTC/ETH control targets prior-close actual candidate gross capped25% at00:05 next day, own ledger and all turnover costs; startup uses planned candidate weights. This is lagged exposure matching, not volatility neutrality.",
+        "match_gate": "At least95% positive-exposure dates planned gross within10% candidate closing gross; clipped drift remains reported and cannot be rescaled after outcomes."
+      },
+      "risk": {
+        "research_capital": 100000,
+        "drawdown_reject": 0.05,
+        "policy": "Existing paper strategy unchanged. Daily qualification includes weekends; exchange session counts do not apply. Slower baseline may fail30episode minimum: inconclusive without automatic extension."
+      },
+      "data_prerequisites": [
+        "200 complete venue UTC warmup bars and quote/event arrival timestamps",
+        "Alpaca quantity/minimum/fee-asset rules and recorded spreads",
+        "Complete balance/fee/position reconstruction and independent fill audit",
+        "Do not treat100000 consumedYTD configurations as independent prospective samples"
+      ],
+      "rejection_gates": [
+        "Fewer than 126 complete paired observations or 30 organic closed episodes: inconclusive, never extend to seek a pass. Terminal accounting closes are not organic episodes.",
+        "Missing point-in-time provenance, corporate actions, executable marks, fees, overhead or reconciliation: nonqualifying. Do not delete missing days.",
+        "Nonpositive before-cost expectancy or net excess, nonpositive stressed/delayed net economics, bootstrap lower bound <=0, or portfolio drawdown >5%: reject.",
+        "Removing five best daily net excess contributions must leave positive cumulative excess; report per-symbol contribution and dependence.",
+        "No gate or sizing changes after outcomes. Every variant consumes a family slot and requires a future untouched window."
+      ]
+    }
+  ]
+}
