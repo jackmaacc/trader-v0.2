@@ -58,7 +58,7 @@ def test_actual_portfolio_persists_plans_fills_and_restart_without_duplicates(tm
     again=record(db,'execute',execute())
     assert not again['inserted'] and again['state']==result['state']
     assert len(read_state(db)['state']['modeled_fills'])==3
-    assert len(result['source_hashes'])==9
+    assert len(result['source_hashes'])==10
     assert not result['execution_authorized'] and not result['prospective_credit']
 
 

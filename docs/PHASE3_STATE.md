@@ -16,7 +16,7 @@ Hashes are unsigned. They identify accidental corruption and internal linkage fa
 
 Offline tests exercise repeat/restart behavior, concurrent attempts at one batch, rollback after state mutation, conflicting identities, corruption, foreign schemas and invalid output. They do not count as paper observations or performance evidence. The current paper service and paper-trial ledger are unchanged.
 
-## Actual portfolio integration
+## Daily portfolio integration
 
 `phase3_portfolio_store.record_portfolio_operation(database, *, run_id, strategy_id, start_utc_day, operation_id, operation, registry)` connects this store to the daily equity/crypto portfolio adapter. Initial state comes from the adapter's flat $100,000 initializer, never an arbitrary supplied balance. The registry must match the implemented frozen design identity.
 
@@ -30,6 +30,10 @@ The JSON `operation` has one of four kinds:
 
 Each outer `operation_id` identifies a single baseline/preparation/execution transaction. It is separate from the portfolio batch ID that pairs preparation with execution. Invalid kinds, malformed numeric inputs or failed transitions cannot commit partial state. These operations model fills only and do not submit broker orders. Source timestamps and baseline references remain caller assertions; storing them is not provenance verification.
 
-The wrapper derives hashes from nine implementation files, including the actual adapters, corporate-action bookkeeping, reservations, store, accounting/decision helpers, protocol validator and conversion layer. It compares source-defined loaded functions with compiled source and checks an import-time file inventory before operations, plus source identity before and after each transition within the transaction. Hot edits, including constant-only edits, cause rejection instead of being silently attributed to previously loaded code. Run in a clean interpreter without monkey patches; this guard is not protection against a hostile runtime or dependencies imported from already-modified files before this module loaded. Python and third-party dependency identities still belong in the separate release manifest.
+The shared `phase3_identity.ImplementationGuard` derives hashes from ten implementation files for the daily wrapper, including the actual adapters, corporate-action bookkeeping, reservations, store, accounting/decision helpers, protocol validator and conversion layer. It compares source-defined loaded functions with compiled source and checks an import-time file inventory before operations, plus source identity before and after each transition within the transaction. Hot edits, including constant-only edits, cause rejection instead of being silently attributed to previously loaded code. Run in a clean interpreter without monkey patches; this guard is not protection against a hostile runtime or dependencies imported from already-modified files before this module loaded. Python and third-party dependency identities still belong in the separate release manifest.
 
 Integration tests persist real adapter preparation and modeled fills, reopen saved state, reject replay conflicts, preserve a halt after recovery, and roll back simulated mid-transition source changes. An equity fixture also closes its modeled positions and independently normalizes its fill journal through the accounting/FIFO module, checking cash, quantity and P&L identities. That fixture has no corporate actions, base-asset crypto fees or broker lifecycle events; it is limited integration evidence, not complete generic-engine parity or actual account reconciliation.
+
+## Other durable books
+
+The [benchmark wrapper](PHASE3_BENCHMARK_STORE.md) derives passive, exposure or delta targets from input evidence and fixes base/stress costs per run. The [options wrapper](PHASE3_OPTIONS_STORE.md) persists base same-observation booking and pending ownership. Each uses the shared identity guard with its own dependency inventory and the same atomic store. Neither implements a coordinated candidate/control replay or makes supplied source assertions independently verified.

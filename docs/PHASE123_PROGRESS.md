@@ -40,11 +40,11 @@ Three designs and a content/source-bound design registry are implemented. See [P
 
 The project goal remains active. No phase is marked complete solely because tooling or fixtures pass, and no stock/options executor is activated by this work.
 
-## Reviewed checkpoint
+## Historical checkpoint: initial implementation
 
 Combined focused regression: **165 passed**, covering host/preflight, evidence finalization/data, observer backup, release receipts, recovery bundles, accounting ledger and research registry. Independent reviewers approved root evidence/power changes, recovery behavior and research design tooling after schema validation repairs. Root reviewed ledger arithmetic/privacy and exercised actual import/deduplication.
 
-`research-design-freeze.json` in the private evidence directory verifies canonical registry hash `b33d9064bb674f3948ac4b004a3ec88ad4553e08236ad42e5278741a6f4bedf0` and the design document/module sources. This is a design-only freeze: adapters are absent, prospective registration is false and no research outcome has been computed.
+`research-design-freeze.json` in the private evidence directory verifies canonical registry hash `b33d9064bb674f3948ac4b004a3ec88ad4553e08236ad42e5278741a6f4bedf0` and the design document/module sources. This original receipt is a design-only freeze: adapters were absent at issuance, prospective registration is false and no research outcome was computed. Later implementation checkpoints below do not rewrite that historical receipt.
 
 ## Causal adapters and attribution checkpoint
 
@@ -83,3 +83,13 @@ A separate options portfolio component books the original pure-adapter candidate
 Combined focused regression: **286 passed**. Independent reviewers checked all three components and confirmed the repairs for options session guards/symbol identity and immutable benchmark plans/pending-sale bounds. The durable dividend test verifies receivable/payment restart and replay without duplicate cash. These are synthetic software checks, not backtests, broker reconciliation, paper activity or prospective credit.
 
 Remaining acceptance includes observed-data valuation construction, complete corporate-action and option lifecycle mappings, integrated stress/delay scenarios, benchmark/candidate accounting and reference parity, precise prospective registration/inference, source/fee/overhead verification and genuinely untouched observations. Generic transactional storage exists, but benchmark/options records still need a reviewed concrete durable integration. PC boot/cutover/recovery and off-host protected backups remain deferred until transfer. The goal stays active; no phase or live-trading gate is declared complete.
+
+## Durable options and benchmark integration
+
+Concrete JSON wrappers now connect options and benchmark books to atomic storage. The options wrapper enforces base same-observation scope, exact financial strings, complete contract/calendar/quote evidence and restart-safe pending ownership. The benchmark wrapper derives targets from causal evidence, fixes base/stress scope for a run, and persists pending sells, owned dust and nonspendable receivables. Both reject caller-supplied arbitrary starting portfolios and preserve replay identity. See [PHASE3_OPTIONS_STORE.md](PHASE3_OPTIONS_STORE.md) and [PHASE3_BENCHMARK_STORE.md](PHASE3_BENCHMARK_STORE.md).
+
+All concrete wrappers share one source/protocol identity guard. Source-defined functions and an import-time file inventory are checked around atomic transitions; this is provenance checking under a clean interpreter, not protection against a hostile runtime. Historical checkpoints above describe the implementation at their respective dates, not current missing modules.
+
+Remaining engineering includes coordinated candidate/passive/matched replay across base, stress and original-plan delay scenarios; independent accounting across those paths; and frozen registration/qualification evaluation. Actual source, fee, overhead and lifecycle evidence, the untouched future sample, and deferred PC recovery/transfer acceptance remain open. No service or trading policy was changed.
+
+Checkpoint validation: **307 combined tests passed** across adapters, ledgers, portfolio books, source guards and durable integrations. Independent reviews passed the 11 options-wrapper tests and 52 benchmark wrapper/ledger/target tests, with no blockers. The shared guard/daily-wrapper refactor passed 23 store/integration tests. These are offline synthetic software checks, not evidence of market returns.
